@@ -7,6 +7,7 @@ import 'package:pckt/features/plan/plan_screen.dart';
 import 'package:pckt/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'balances_test.dart' show appLikeTheme;
 import 'budget_test.dart' show memoryDb;
 
 void main() {
@@ -20,7 +21,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db), prefsProvider.overrideWithValue(prefs)],
-        child: const MaterialApp(home: PlanScreen()),
+        child: MaterialApp(theme: appLikeTheme, home: const PlanScreen()),
       ),
     );
     for (var i = 0; i < 5; i++) {

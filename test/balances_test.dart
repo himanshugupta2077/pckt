@@ -11,6 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'budget_test.dart' show memoryDb;
 
+/// AppTheme without its Google Fonts (they download at runtime): the app's
+/// filled buttons are full width, which breaks a Row that doesn't size them.
+final appLikeTheme = ThemeData.dark().copyWith(
+  filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54))),
+);
+
 BalanceSnapshot snap(DateTime month, String label, int minor, {bool liability = false}) =>
     BalanceSnapshot(id: 0, month: month, label: label, amountMinor: minor, isLiability: liability);
 
@@ -65,10 +71,12 @@ void main() {
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db), prefsProvider.overrideWithValue(prefs)],
         child: MaterialApp(
+          theme: appLikeTheme,
           home: Scaffold(
             body: Builder(
               builder: (context) => Column(
                 children: [
+                  BalancesCard(now: DateTime(month.year, month.month, 3)),
                   const BucketsCard(),
                   TextButton(
                     onPressed: () => showBalancesSheet(context, month, defaultBalanceLabels),
@@ -89,6 +97,9 @@ void main() {
     }
 
     await settle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Fill in'), findsOneWidget);
+    expect(find.text('Back up now'), findsOneWidget);
     expect(find.text('Buckets'), findsOneWidget);
     expect(find.text('₹649'), findsOneWidget);
 

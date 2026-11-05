@@ -19,12 +19,15 @@ final snapshotsProvider = StreamProvider<List<BalanceSnapshot>>((ref) {
 /// On Home from the 1st to the 7th until this month's balances are in:
 /// net worth for recent months, a way to fill this one, and a backup.
 class BalancesCard extends ConsumerWidget {
-  const BalancesCard({super.key});
+  const BalancesCard({super.key, this.now});
+
+  /// Today, unless a test sets it.
+  final DateTime? now;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snaps = ref.watch(snapshotsProvider).value;
-    final now = DateTime.now();
+    final now = this.now ?? DateTime.now();
     if (snaps == null || !balancesDue(now, snaps)) return const SizedBox.shrink();
     final month = monthStart(now);
     final history = netWorthByMonth(snaps);
@@ -57,12 +60,17 @@ class BalancesCard extends ConsumerWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                FilledButton.tonal(
-                  onPressed: () => showBalancesSheet(context, month, balanceLabels(snaps, month)),
-                  child: const Text('Fill in'),
+                // The theme's filled buttons are full width, so each side gets half.
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: () => showBalancesSheet(context, month, balanceLabels(snaps, month)),
+                    child: const Text('Fill in'),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                TextButton(onPressed: () => backUpNow(context, ref), child: const Text('Back up now')),
+                Expanded(
+                  child: TextButton(onPressed: () => backUpNow(context, ref), child: const Text('Back up now')),
+                ),
               ],
             ),
           ],
