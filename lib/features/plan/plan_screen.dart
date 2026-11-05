@@ -17,6 +17,8 @@ import 'plan_providers.dart';
 
 String _monthYear(DateTime m) => DateFormat('MMM yyyy').format(m);
 
+String _signed(int minor) => minor < 0 ? '−${money(-minor)}' : money(minor);
+
 /// The monthly plan: what's planned to be left over after everything that
 /// goes out each month. Saved as you type.
 class PlanScreen extends ConsumerWidget {
@@ -59,7 +61,7 @@ class _Outcome extends StatelessWidget {
           Text('Planned left over', style: muted),
           const SizedBox(height: 4),
           Text(
-            '${money(o.leftOver)}/month',
+            '${_signed(o.leftOver)}/month',
             style: context.text.headlineMedium?.copyWith(
               fontWeight: FontWeight.w700,
               color: o.leftOver < 0 ? Palette.coral : null,
@@ -108,7 +110,7 @@ class _Line extends StatelessWidget {
             ),
           ),
           Text(
-            minor < 0 ? '−${money(-minor)}' : money(minor),
+            _signed(minor),
             style: context.text.bodyMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
           ),
         ],
@@ -312,7 +314,7 @@ class PlanLine extends ConsumerWidget {
               child: Text('Planned left over', style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
             ),
             Text(
-              o.salary == 0 ? 'Set up' : '${money(o.leftOver)}/month',
+              o.salary == 0 ? 'Set up' : '${_signed(o.leftOver)}/month',
               style: context.text.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: o.salary > 0 && o.leftOver < 0 ? Palette.coral : null,
