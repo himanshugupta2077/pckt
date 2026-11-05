@@ -37,11 +37,7 @@ class DataExportTiles extends ConsumerWidget {
         leading: const Icon(PhosphorIconsRegular.archive),
         title: const Text('Back up everything'),
         subtitle: const Text('Accounts, categories, transactions, messages and rules as JSON'),
-        onTap: () => _run(context, () async {
-          final json = await ref.read(dataExportProvider).backupJson();
-          if (!context.mounted) return;
-          await _deliver(context, 'pckt-backup-${_stamp()}.json', utf8.encode(json), 'application/json');
-        }),
+        onTap: () => backUpNow(context, ref),
       ),
       ListTile(
         leading: const Icon(PhosphorIconsRegular.clockCounterClockwise),
@@ -52,6 +48,13 @@ class DataExportTiles extends ConsumerWidget {
     ],
   );
 }
+
+/// Full JSON backup, shared or saved where the user picks.
+Future<void> backUpNow(BuildContext context, WidgetRef ref) => _run(context, () async {
+  final json = await ref.read(dataExportProvider).backupJson();
+  if (!context.mounted) return;
+  await _deliver(context, 'pckt-backup-${_stamp()}.json', utf8.encode(json), 'application/json');
+});
 
 String _stamp() => DateFormat('yyyyMMdd-HHmm').format(DateTime.now());
 

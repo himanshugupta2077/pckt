@@ -11,6 +11,7 @@ import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
 import '../budgets/budget_providers.dart';
 import '../budgets/budget_widgets.dart';
+import '../plan/balances_card.dart';
 import '../plan/plan_screen.dart';
 import '../stats.dart';
 import 'buckets_card.dart';
@@ -53,6 +54,7 @@ class DashboardScreen extends ConsumerWidget {
                           BudgetCard(hasSpending: stats.spent > 0),
                           const BucketsCard(),
                           const PlanLine(),
+                          const BalancesCard(),
                           if (sortCount > 0) ...[const SizedBox(height: 12), _SortBanner(count: sortCount)],
                           if (review > 0) ...[const SizedBox(height: 12), _ReviewBanner(count: review)],
                           if (stats.unconverted > 0) ...[

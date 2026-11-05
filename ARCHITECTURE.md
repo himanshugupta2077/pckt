@@ -23,7 +23,8 @@ lib/
     sms/                Android SMS inbox reader (MethodChannel `pckt/sms`, see MainActivity.kt)
     email/              IMAP (enough_mail) + Gmail API sources, HTML→text, EmailSyncController
     parser/email_*      email parser: sender-domain directory, bank alerts via SMS rules, merchant receipts
-  data/db/              drift schema: accounts, categories, transactions, raw_messages, merchant_rules
+  data/db/              drift schema: accounts, categories, transactions, raw_messages, merchant_rules,
+                        budgets, plan, balance_snapshots
   llm/                  bring-your-own LLM: LlmClient + OpenAI-compatible / Anthropic / Gemini clients,
                         fallback parser, AI categoriser, agent + tools over the local DB
   features/             dashboard, activity, insights, assistant (Ask), settings, onboarding
@@ -56,6 +57,24 @@ into a bank alert, its merchant name replaces the bank's and the category is re-
 unless the user set one.
 A debit from one own account and an equal credit to another within an hour is
 marked as a self-transfer and excluded from spend/income.
+
+## Buckets
+
+Every debit lands in one bucket (schema v6): **Everyday**, **Fixed** (bills, subscriptions, gym),
+**Fund** (big and occasional buys, judged against the plan over the year) or **Outside** (investments,
+loans, family). Only Everyday counts toward the monthly budget, so the hero, budget alerts and
+insights read it as before. `budgetDecision` (`lib/features/budgets/in_budget.dart`) decides, first
+match wins: transfers and money in are in no bucket; then the payment's own bucket, the payee rule's,
+the category's; otherwise Everyday. "Big & occasional" on the transaction sheet moves that one
+payment to the fund without touching the payee.
+
+The Plan screen (`lib/features/plan/`) holds one `plan` row: salary, EMI and its end month,
+investing, fund and up to three goals. Fixed, Family and Insurance come from averages over complete
+months (the month the bank SMS start in counts only if they start in its first three days).
+`balance_snapshots` holds the balances entered on Home in the first week of each month.
+
+The v5 yes/no columns stay in the schema unread; `migrateToBuckets` turns them into buckets once,
+on upgrade and when restoring an older backup.
 
 ## Currencies
 
