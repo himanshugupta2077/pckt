@@ -12,6 +12,7 @@ import '../activity/transaction_sheet.dart';
 import '../budgets/budget_providers.dart';
 import '../budgets/budget_widgets.dart';
 import '../stats.dart';
+import 'buckets_card.dart';
 import 'category_donut.dart';
 import 'hero_card.dart';
 
@@ -49,6 +50,7 @@ class DashboardScreen extends ConsumerWidget {
                           HeroCard(stats: stats, month: month),
                           const SizedBox(height: 12),
                           BudgetCard(hasSpending: stats.spent > 0),
+                          const BucketsCard(),
                           if (sortCount > 0) ...[const SizedBox(height: 12), _SortBanner(count: sortCount)],
                           if (review > 0) ...[const SizedBox(height: 12), _ReviewBanner(count: review)],
                           if (stats.unconverted > 0) ...[

@@ -337,10 +337,12 @@ class AppDatabase extends _$AppDatabase {
   /// Null only until [ensurePlan] has run.
   Stream<MonthlyPlan?> watchPlan() => (select(plan)..limit(1)).watchSingleOrNull();
 
-  /// When the data starts: the earliest message or manual entry seen.
+  /// When the data starts: the earliest bank SMS, or the earliest message
+  /// of any kind for an install without SMS.
   Stream<DateTime?> watchDataStart() {
     final first = rawMessages.receivedAt.min();
-    return (selectOnly(rawMessages)..addColumns([first])).watchSingle().map((r) => r.read(first));
+    final sms = rawMessages.receivedAt.min(filter: rawMessages.source.equalsValue(SourceKind.sms));
+    return (selectOnly(rawMessages)..addColumns([first, sms])).watchSingle().map((r) => r.read(sms) ?? r.read(first));
   }
 
   /// Snapshots from [from] on, oldest first.
