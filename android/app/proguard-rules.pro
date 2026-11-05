@@ -17,6 +17,13 @@
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
 
+# shared_preferences_android 2.5 calls its Kotlin API from Dart over JNI (jnigen)
+# by name and ships no keep rule, so R8 strips it and startup hangs. The generated
+# bindings also look up Kotlin stdlib types (Continuation, Result, …) by name.
+-keep class io.flutter.plugins.sharedpreferences.** { *; }
+-keep class kotlin.** { *; }
+-keep class kotlinx.coroutines.** { *; }
+
 # Our MethodChannel handlers (SMS, device profile, FLAG_SECURE).
 -keep class com.pckt.pckt.** { *; }
 
