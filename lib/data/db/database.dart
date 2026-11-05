@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../core/currency.dart';
+import '../../core/format.dart' show monthStart;
 import '../seed/default_categories.dart';
 import 'db_encryption.dart';
 import 'tables.dart';
@@ -35,7 +36,9 @@ extension TxnMoney on Transaction {
   bool get isForeign => currency != Currencies.home;
 }
 
-@DriftDatabase(tables: [Accounts, Categories, Transactions, RawMessages, MerchantRules, Budgets])
+@DriftDatabase(
+  tables: [Accounts, Categories, Transactions, RawMessages, MerchantRules, Budgets, Plan, BalanceSnapshots],
+)
 class AppDatabase extends _$AppDatabase {
   /// Without an [executor], opens the SQLCipher-encrypted `pckt.sqlite`
   /// (migrating a plaintext one first) — see [openAppDatabase].
@@ -45,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -55,9 +58,16 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('CREATE INDEX idx_txn_amount ON transactions (amount_minor, direction)');
       await customStatement('CREATE INDEX idx_txn_ref ON transactions (reference)');
       await _seedCategories();
+      await ensurePlan();
     },
     onUpgrade: (m, from, to) async {
-      // v5 columns before anything that writes categories or transactions.
+      // v5 and v6 columns before anything that reads or writes categories,
+      // transactions or rules.
+      if (from < 6) {
+        await _addColumnIfMissing(m, categories, categories.bucket);
+        await _addColumnIfMissing(m, transactions, transactions.bucket);
+        await _addColumnIfMissing(m, merchantRules, merchantRules.bucket);
+      }
       if (from < 5) {
         await _addColumnIfMissing(m, categories, categories.countsInBudget);
         await _addColumnIfMissing(m, transactions, transactions.inBudget);
@@ -87,7 +97,13 @@ class AppDatabase extends _$AppDatabase {
       // budget answer, so their category becomes optional (a table rebuild).
       if (from < 5) {
         await m.alterTable(TableMigration(merchantRules, newColumns: [merchantRules.countsInBudget]));
-        await ensureBudgetSeeds();
+      }
+      // v6: buckets replace the yes/no, plus the plan and monthly balances.
+      if (from < 6) {
+        await m.createTable(plan);
+        await m.createTable(balanceSnapshots);
+        await migrateToBuckets();
+        await ensurePlan();
       }
     },
     beforeOpen: (details) async {
@@ -113,7 +129,7 @@ class AppDatabase extends _$AppDatabase {
             isIncome: Value(c.isIncome),
             sortOrder: Value(i),
             seedName: Value(c.name),
-            countsInBudget: Value(c.countsInBudget),
+            bucket: Value(c.bucket),
           ),
         );
       }
@@ -135,24 +151,56 @@ class AppDatabase extends _$AppDatabase {
           isIncome: Value(c.isIncome),
           sortOrder: Value(i),
           seedName: Value(c.name),
-          countsInBudget: Value(c.countsInBudget),
+          bucket: Value(c.bucket),
         ),
       );
     }
   }
 
-  /// Adds seed categories this install lacks (Family, from v5) and keeps
-  /// investments, loans, insurance, transfers and family out of the budget.
-  /// Run when upgrading to v5 and after restoring an older backup.
-  Future<void> ensureBudgetSeeds() async {
+  /// Categories made by hand before they were seeds, adopted instead of
+  /// duplicated: by name, the bucket they get.
+  static const _adoptedCategories = {'Big & occasional': Bucket.fund, 'Gym & supplements': Bucket.fixed};
+
+  /// One-time move from the v5 yes/no answers to buckets, run when
+  /// upgrading to v6 and after restoring an older backup. Adds missing seed
+  /// categories (Family, Big & occasional), sets each category's bucket by
+  /// its seed, then turns every payment and payee answer into a bucket:
+  /// yes → Everyday; no → the category's bucket, or Outside if that is
+  /// Everyday. The old yes/no columns are left as they are.
+  Future<void> migrateToBuckets() => transaction(() async {
+    await (update(categories)..where((c) => c.name.equals('Big & occasional') & c.seedName.isNull())).write(
+      const CategoriesCompanion(seedName: Value('Big & occasional')),
+    );
     await _addMissingSeedCategories();
-    final outside = [
-      for (final c in defaultCategories)
-        if (!c.countsInBudget) c.name,
-    ];
-    await (update(
-      categories,
-    )..where((c) => c.seedName.isIn(outside))).write(const CategoriesCompanion(countsInBudget: Value(false)));
+    final seeds = {for (final c in defaultCategories) c.name: c.bucket};
+    for (final c in await select(categories).get()) {
+      // A hand-made category the user had switched off stays out of Everyday.
+      final b =
+          seeds[c.seedName] ??
+          _adoptedCategories[c.name] ??
+          (c.countsInBudget || c.isIncome ? Bucket.everyday : Bucket.outside);
+      await (update(categories)..where((r) => r.id.equals(c.id))).write(CategoriesCompanion(bucket: Value(b)));
+    }
+    final (everyday, outside) = (Bucket.everyday.index, Bucket.outside.index);
+    String no(String categoryId) =>
+        'COALESCE((SELECT CASE bucket WHEN $everyday THEN $outside ELSE bucket END '
+        'FROM categories WHERE id = $categoryId), $outside)';
+    await customUpdate(
+      'UPDATE transactions SET bucket = CASE in_budget WHEN 1 THEN $everyday ELSE ${no('transactions.category_id')} END '
+      'WHERE in_budget IS NOT NULL',
+      updates: {transactions},
+    );
+    await customUpdate(
+      'UPDATE merchant_rules SET bucket = CASE counts_in_budget WHEN 1 THEN $everyday '
+      'ELSE ${no('merchant_rules.category_id')} END WHERE counts_in_budget IS NOT NULL',
+      updates: {merchantRules},
+    );
+  });
+
+  /// Creates the plan row, starting this month, if there is none.
+  Future<void> ensurePlan() async {
+    if (await (select(plan)..limit(1)).getSingleOrNull() != null) return;
+    await into(plan).insert(PlanCompanion.insert(startMonth: monthStart(DateTime.now())));
   }
 
   // ---------------------------------------------------------------- reads
@@ -286,6 +334,22 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<MerchantRule>> allMerchantRules() => select(merchantRules).get();
 
+  /// Null only until [ensurePlan] has run.
+  Stream<MonthlyPlan?> watchPlan() => (select(plan)..limit(1)).watchSingleOrNull();
+
+  /// When the data starts: the earliest message or manual entry seen.
+  Stream<DateTime?> watchDataStart() {
+    final first = rawMessages.receivedAt.min();
+    return (selectOnly(rawMessages)..addColumns([first])).watchSingle().map((r) => r.read(first));
+  }
+
+  /// Snapshots from [from] on, oldest first.
+  Stream<List<BalanceSnapshot>> watchSnapshots({required DateTime from}) =>
+      (select(balanceSnapshots)
+            ..where((s) => s.month.isBiggerOrEqualValue(from))
+            ..orderBy([(s) => OrderingTerm(expression: s.month), (s) => OrderingTerm(expression: s.id)]))
+          .watch();
+
   // ---------------------------------------------------------------- writes
 
   Future<void> setCategory(int txnId, int? categoryId, {String? learnPattern}) => transaction(() async {
@@ -333,27 +397,25 @@ class AppDatabase extends _$AppDatabase {
     const TransactionsCompanion(status: Value(TxnStatus.confirmed), duplicateOfId: Value(null)),
   );
 
-  /// The user's answer to "counts toward budget?" for one payment; null
-  /// goes back to the payee rule / category.
-  Future<void> setInBudget(int id, bool? value) =>
-      (update(transactions)..where((t) => t.id.equals(id))).write(TransactionsCompanion(inBudget: Value(value)));
+  /// The bucket for one payment; null goes back to the payee rule /
+  /// category. Touches no other payment and no rule.
+  Future<void> setTxnBucket(int id, Bucket? bucket) =>
+      (update(transactions)..where((t) => t.id.equals(id))).write(TransactionsCompanion(bucket: Value(bucket)));
 
-  /// Whether payments to [merchant] count toward the budget (null removes
-  /// the answer). Payments to it that had their own answer follow the rule
-  /// from now on, so one switch decides for the payee.
-  Future<void> setPayeeBudget(String merchant, bool? value) => transaction(() async {
+  /// The bucket for every payment to [merchant] (null removes the answer).
+  /// Payments to it that had their own bucket follow the rule from now on,
+  /// so one pick decides for the payee, except ones marked Big & occasional:
+  /// that is a call about one purchase.
+  Future<void> setPayeeBucket(String merchant, Bucket? bucket) => transaction(() async {
     final pattern = merchant.toLowerCase();
     if (pattern.isEmpty) return;
     await into(merchantRules).insert(
-      MerchantRulesCompanion.insert(pattern: pattern, countsInBudget: Value(value)),
-      onConflict: DoUpdate(
-        (_) => MerchantRulesCompanion(countsInBudget: Value(value)),
-        target: [merchantRules.pattern],
-      ),
+      MerchantRulesCompanion.insert(pattern: pattern, bucket: Value(bucket)),
+      onConflict: DoUpdate((_) => MerchantRulesCompanion(bucket: Value(bucket)), target: [merchantRules.pattern]),
     );
-    await (update(
-      transactions,
-    )..where((t) => t.merchant.lower().equals(pattern))).write(const TransactionsCompanion(inBudget: Value(null)));
+    await (update(transactions)
+          ..where((t) => t.merchant.lower().equals(pattern) & t.bucket.equalsValue(Bucket.fund).not()))
+        .write(const TransactionsCompanion(bucket: Value(null)));
   });
 
   Future<void> setTransfer(int id, bool value) =>
@@ -473,7 +535,7 @@ class AppDatabase extends _$AppDatabase {
         MerchantRulesCompanion.insert(
           pattern: newKey,
           categoryId: Value(oldRule.categoryId),
-          countsInBudget: Value(oldRule.countsInBudget),
+          bucket: Value(oldRule.bucket),
         ),
       );
     }
@@ -520,6 +582,25 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteBudget(int id) => (delete(budgets)..where((b) => b.id.equals(id))).go();
 
+  // -------------------------------------------------------------- plan
+
+  Future<void> savePlan(PlanCompanion values) => update(plan).write(values);
+
+  /// Replaces [month]'s balances with [rows]: (label, amount, liability).
+  Future<void> saveSnapshots(DateTime month, List<(String, int, bool)> rows) => transaction(() async {
+    await (delete(balanceSnapshots)..where((s) => s.month.equals(month))).go();
+    for (final (label, amount, liability) in rows) {
+      await into(balanceSnapshots).insert(
+        BalanceSnapshotsCompanion.insert(
+          month: month,
+          label: label,
+          amountMinor: amount,
+          isLiability: Value(liability),
+        ),
+      );
+    }
+  });
+
   // ---------------------------------------------------------- accounts
 
   /// [currency] defaults to the home currency.
@@ -558,14 +639,14 @@ class AppDatabase extends _$AppDatabase {
         );
       });
 
-  Future<void> updateCategory(int id, {String? name, String? icon, int? color, bool? isIncome, bool? countsInBudget}) =>
+  Future<void> updateCategory(int id, {String? name, String? icon, int? color, bool? isIncome, Bucket? bucket}) =>
       (update(categories)..where((c) => c.id.equals(id))).write(
         CategoriesCompanion(
           name: name == null ? const Value.absent() : Value(name),
           icon: icon == null ? const Value.absent() : Value(icon),
           color: color == null ? const Value.absent() : Value(color),
           isIncome: isIncome == null ? const Value.absent() : Value(isIncome),
-          countsInBudget: countsInBudget == null ? const Value.absent() : Value(countsInBudget),
+          bucket: bucket == null ? const Value.absent() : Value(bucket),
         ),
       );
 

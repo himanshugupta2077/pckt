@@ -1,4 +1,5 @@
 import '../../core/theme/palette.dart';
+import '../db/tables.dart' show Bucket;
 
 class CategorySeed {
   const CategorySeed(
@@ -7,7 +8,7 @@ class CategorySeed {
     this.colorIndex, {
     this.isIncome = false,
     this.keywords = const [],
-    this.countsInBudget = true,
+    this.bucket = Bucket.everyday,
   });
 
   final String name;
@@ -15,9 +16,8 @@ class CategorySeed {
   final int colorIndex;
   final bool isIncome;
 
-  /// False for money that leaves but isn't spending (investments, loans,
-  /// transfers, family support).
-  final bool countsInBudget;
+  /// Bucket new rows of this category start in.
+  final Bucket bucket;
 
   /// Lower-case merchant/VPA fragments that map to this category out of the box.
   final List<String> keywords;
@@ -170,6 +170,7 @@ const defaultCategories = <CategorySeed>[
     'Bills & Utilities',
     'bills',
     3,
+    bucket: Bucket.fixed,
     keywords: [
       'electricity',
       'bescom',
@@ -190,6 +191,7 @@ const defaultCategories = <CategorySeed>[
     'Mobile & Internet',
     'recharge',
     0,
+    bucket: Bucket.fixed,
     keywords: ['jio', 'airtel', 'vodafone', 'vi ', 'bsnl', 'act fibernet', 'hathway', 'recharge', 'broadband'],
   ),
   CategorySeed(
@@ -208,6 +210,7 @@ const defaultCategories = <CategorySeed>[
     'Subscriptions',
     'subscriptions',
     4,
+    bucket: Bucket.fixed,
     keywords: [
       'netflix',
       'spotify',
@@ -247,7 +250,13 @@ const defaultCategories = <CategorySeed>[
       'medical',
     ],
   ),
-  CategorySeed('Fitness', 'fitness', 5, keywords: ['cult', 'cure.fit', 'gym', 'fitness', 'yoga', 'decathlon sports']),
+  CategorySeed(
+    'Fitness',
+    'fitness',
+    5,
+    bucket: Bucket.fixed,
+    keywords: ['cult', 'cure.fit', 'gym', 'fitness', 'yoga', 'healthkart'],
+  ),
   CategorySeed(
     'Education',
     'education',
@@ -261,11 +270,13 @@ const defaultCategories = <CategorySeed>[
     6,
     keywords: ['donation', 'charity', 'temple', 'gift', 'giveindia', 'ketto'],
   ),
+  // Durable goods, gear, trips and annual renewals, set by hand.
+  CategorySeed('Big & occasional', 'shopping', 3, bucket: Bucket.fund),
   CategorySeed(
     'Investments',
     'investments',
     2,
-    countsInBudget: false,
+    bucket: Bucket.outside,
     keywords: [
       'indian clearing corp', // ICCL — mutual fund SIP NACH debits
       'iccl',
@@ -286,7 +297,7 @@ const defaultCategories = <CategorySeed>[
     'Insurance',
     'insurance',
     0,
-    countsInBudget: false,
+    bucket: Bucket.outside,
     keywords: [
       'lic of india',
       'lic',
@@ -307,13 +318,13 @@ const defaultCategories = <CategorySeed>[
     'Loans & EMI',
     'emi',
     1,
-    countsInBudget: false,
+    bucket: Bucket.outside,
     keywords: ['emi', 'loan', 'bajaj finance', 'home credit', 'credit card payment', 'cred'],
   ),
   CategorySeed('People', 'people', -1),
-  CategorySeed('Family', 'family', 6, countsInBudget: false),
+  CategorySeed('Family', 'family', 6, bucket: Bucket.outside),
   CategorySeed('Cash Withdrawal', 'cash', 5, keywords: ['atm', 'cash withdrawal']),
-  CategorySeed('Transfers', 'transfer', -1, countsInBudget: false),
+  CategorySeed('Transfers', 'transfer', -1, bucket: Bucket.outside),
   CategorySeed('Other', 'other', -1),
   // Income
   CategorySeed('Salary', 'salary', 2, isIncome: true, keywords: ['salary', 'payroll', 'sal cr']),

@@ -1,26 +1,38 @@
 import '../../data/db/database.dart';
 
-/// Why a payment does or doesn't count toward the budget.
+/// Why a payment is in its bucket.
 enum BudgetSource { transfer, income, manual, payee, category, fallback }
 
 class BudgetDecision {
-  const BudgetDecision(this.counts, this.source);
-  final bool counts;
+  const BudgetDecision(this.bucket, this.source);
+
+  /// Null for transfers and money in, which are in no bucket.
+  final Bucket? bucket;
   final BudgetSource source;
+
+  /// Only Everyday counts toward the monthly budget.
+  bool get counts => bucket == Bucket.everyday;
 }
 
-/// The one place that decides "counts toward budget?". First match wins:
-/// transfers and money in never count; then the user's answer for this
-/// payment, the payee rule, the category; anything else counts.
+/// The one place that decides a payment's bucket. First match wins:
+/// transfers and money in never count; then the bucket set for this
+/// payment, the payee's, the category's; anything else is Everyday.
 BudgetDecision budgetDecision(TxnView v) {
   final t = v.txn;
-  if (t.isTransfer) return const BudgetDecision(false, BudgetSource.transfer);
-  if (t.direction == TxnDirection.credit) return const BudgetDecision(false, BudgetSource.income);
-  if (t.inBudget case final b?) return BudgetDecision(b, BudgetSource.manual);
-  if (v.rule?.countsInBudget case final b?) return BudgetDecision(b, BudgetSource.payee);
-  if (v.category case final c?) return BudgetDecision(c.countsInBudget, BudgetSource.category);
-  return const BudgetDecision(true, BudgetSource.fallback);
+  if (t.isTransfer) return const BudgetDecision(null, BudgetSource.transfer);
+  if (t.direction == TxnDirection.credit) return const BudgetDecision(null, BudgetSource.income);
+  if (t.bucket case final b?) return BudgetDecision(b, BudgetSource.manual);
+  if (v.rule?.bucket case final b?) return BudgetDecision(b, BudgetSource.payee);
+  if (v.category case final c?) return BudgetDecision(c.bucket, BudgetSource.category);
+  return const BudgetDecision(Bucket.everyday, BudgetSource.fallback);
 }
+
+String bucketLabel(Bucket b) => switch (b) {
+  Bucket.everyday => 'Everyday',
+  Bucket.fixed => 'Fixed',
+  Bucket.fund => 'Big & occasional',
+  Bucket.outside => 'Outside',
+};
 
 /// Short line for the transaction sheet.
 String budgetSourceLabel(TxnView v) {
@@ -31,7 +43,7 @@ String budgetSourceLabel(TxnView v) {
     BudgetSource.manual => 'Set for this payment',
     BudgetSource.payee => 'From payee rule',
     BudgetSource.category => 'From category: ${v.category!.name}',
-    BudgetSource.fallback => 'No category, so it counts',
+    BudgetSource.fallback => 'No category, so Everyday',
   };
 }
 
@@ -48,8 +60,8 @@ const _vagueCategories = {'Other', 'People'};
 /// merchant (see [merchantCounts]).
 bool needsSorting(TxnView v, Map<String, int> merchantCounts) {
   final t = v.txn;
-  if (t.isTransfer || t.direction != TxnDirection.debit || t.inBudget != null) return false;
-  if (v.rule?.countsInBudget != null) return false;
+  if (t.isTransfer || t.direction != TxnDirection.debit || t.bucket != null) return false;
+  if (v.rule?.bucket != null) return false;
   final c = v.category;
   if (c != null && !_vagueCategories.contains(c.seedName ?? c.name)) return false;
   final amount = t.homeMinor ?? 0;

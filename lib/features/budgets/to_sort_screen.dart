@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/theme/icons.dart';
+import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
@@ -51,10 +52,10 @@ class _SortTile extends ConsumerWidget {
   const _SortTile({required this.item});
   final SortItem item;
 
-  Future<void> _answer(WidgetRef ref, bool counts) {
+  Future<void> _answer(WidgetRef ref, Bucket bucket) {
     final db = ref.read(databaseProvider);
     final merchant = item.merchant;
-    return merchant == null ? db.setInBudget(item.latest.txn.id, counts) : db.setPayeeBudget(merchant, counts);
+    return merchant == null ? db.setTxnBucket(item.latest.txn.id, bucket) : db.setPayeeBucket(merchant, bucket);
   }
 
   @override
@@ -102,11 +103,11 @@ class _SortTile extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(onPressed: () => _answer(ref, false), child: const Text('Not budget')),
+                child: OutlinedButton(onPressed: () => _answer(ref, Bucket.outside), child: const Text('Not budget')),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: FilledButton.tonal(onPressed: () => _answer(ref, true), child: const Text('Budget')),
+                child: FilledButton.tonal(onPressed: () => _answer(ref, Bucket.everyday), child: const Text('Budget')),
               ),
             ],
           ),

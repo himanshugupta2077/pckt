@@ -16,6 +16,12 @@ enum ParseStatus { parsed, merged, ignored, failed, pendingLlm }
 
 enum AccountKind { bank, creditCard, wallet, cash }
 
+/// Where a debit belongs. Only [everyday] counts toward the monthly budget;
+/// [fixed] is bills and subscriptions, [fund] the big and occasional buys
+/// judged over the year, [outside] money that leaves but isn't spending
+/// (investments, loans, family).
+enum Bucket { everyday, fixed, fund, outside }
+
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -45,9 +51,13 @@ class Categories extends Table {
   /// user-made ones). Keeps keyword rules working after a rename.
   TextColumn get seedName => text().nullable()();
 
-  /// Whether spends in this category count toward the monthly budget,
-  /// unless a payee rule or the transaction itself says otherwise.
+  /// v5 yes/no, replaced by [bucket] in v6. Kept (unread) so older
+  /// backups still carry it into the one-time bucket migration.
   BoolColumn get countsInBudget => boolean().withDefault(const Constant(true))();
+
+  /// Bucket for spends in this category, unless a payee rule or the
+  /// transaction itself says otherwise.
+  IntColumn get bucket => intEnum<Bucket>().withDefault(const Constant(0))();
 }
 
 class Transactions extends Table {
@@ -90,9 +100,13 @@ class Transactions extends Table {
   IntColumn get duplicateOfId => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
-  /// The user's own answer to "counts toward budget?" for this payment.
-  /// Null = follow the payee rule, then the category.
+  /// v5 yes/no, replaced by [bucket] in v6. Kept (unread) for the
+  /// one-time migration.
   BoolColumn get inBudget => boolean().nullable()();
+
+  /// The user's bucket for this payment. Null = follow the payee rule,
+  /// then the category.
+  IntColumn get bucket => intEnum<Bucket>().nullable()();
 }
 
 /// Every SMS / email we have looked at, parsed or not. Keeping the raw
@@ -137,11 +151,64 @@ class Budgets extends Table {
 }
 
 /// Learned per-merchant rules: a category (set when the user recategorises
-/// a transaction) and/or whether the payee counts toward the budget. Either
-/// may be null on its own.
+/// a transaction) and/or the payee's bucket. Either may be null on its own.
 class MerchantRules extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get pattern => text().unique()();
   IntColumn get categoryId => integer().nullable().references(Categories, #id, onDelete: KeyAction.cascade)();
+
+  /// v5 yes/no, replaced by [bucket] in v6. Kept (unread) for the
+  /// one-time migration.
   BoolColumn get countsInBudget => boolean().nullable()();
+  IntColumn get bucket => intEnum<Bucket>().nullable()();
+}
+
+/// The monthly plan: one row. Amounts are home-currency minor units per
+/// month; months are stored as the 1st of the month. Everyday, Fixed,
+/// Family and Insurance aren't typed here: they come from the overall
+/// budget and from averages over complete months.
+@DataClassName('MonthlyPlan')
+class Plan extends Table {
+  @override
+  String get tableName => 'plan';
+
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Month the plan started; the fund is measured from here.
+  DateTimeColumn get startMonth => dateTime()();
+  IntColumn get salaryMinor => integer().withDefault(const Constant(0))();
+  IntColumn get emiMinor => integer().withDefault(const Constant(0))();
+
+  /// Last month the EMI is paid.
+  DateTimeColumn get emiEnds => dateTime().nullable()();
+
+  /// Investing per month, not counting goal savings.
+  IntColumn get investingMinor => integer().withDefault(const Constant(0))();
+  IntColumn get fundMinor => integer().withDefault(const Constant(1000000))();
+
+  /// Up to three goals, in entry order (emergency fund first): the amount
+  /// still to save and the month it's due.
+  IntColumn get goal1Minor => integer().nullable()();
+  DateTimeColumn get goal1Due => dateTime().nullable()();
+  IntColumn get goal2Minor => integer().nullable()();
+  DateTimeColumn get goal2Due => dateTime().nullable()();
+  IntColumn get goal3Minor => integer().nullable()();
+  DateTimeColumn get goal3Due => dateTime().nullable()();
+}
+
+/// What each account held at the start of a month, entered by hand.
+/// Net worth = assets − liabilities.
+class BalanceSnapshots extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// The 1st of the month.
+  DateTimeColumn get month => dateTime()();
+  TextColumn get label => text()();
+  IntColumn get amountMinor => integer()();
+  BoolColumn get isLiability => boolean().withDefault(const Constant(false))();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {month, label},
+  ];
 }

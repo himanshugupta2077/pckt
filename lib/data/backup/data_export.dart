@@ -36,7 +36,8 @@ class BackupSummary {
 /// in later schema versions. Restore accepts backups from the same or an
 /// older schema; unknown columns are dropped and missing ones take their
 /// defaults (so a backup from before v4 restores with every amount in INR,
-/// which is what it was; one from before v5 gets the budget defaults).
+/// which is what it was; one from before v6 has its yes/no answers turned
+/// into buckets).
 class DataExport {
   DataExport(this.db);
 
@@ -162,7 +163,8 @@ class DataExport {
           );
         }
       }
-      if (summary.schemaVersion < 5) await db.ensureBudgetSeeds();
+      if (summary.schemaVersion < 6) await db.migrateToBuckets();
+      await db.ensurePlan();
     });
     return summary;
   }

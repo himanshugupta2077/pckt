@@ -80,7 +80,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 final c = shown[i];
                 final note = [
                   if (AppDatabase.isProtected(c)) 'Built-in',
-                  if (!_income && !c.countsInBudget) 'Outside budget',
+                  if (!_income && c.bucket != Bucket.everyday) 'Outside budget',
                 ];
                 return ListTile(
                   key: ValueKey(c.id),
@@ -93,8 +93,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                     children: [
                       if (!_income)
                         Switch(
-                          value: c.countsInBudget,
-                          onChanged: (on) => ref.read(databaseProvider).updateCategory(c.id, countsInBudget: on),
+                          value: c.bucket == Bucket.everyday,
+                          onChanged: (on) => ref
+                              .read(databaseProvider)
+                              .updateCategory(c.id, bucket: on ? Bucket.everyday : Bucket.outside),
                         ),
                       ReorderableDragStartListener(
                         index: i,
@@ -207,6 +209,7 @@ class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
       isIncome: _income,
       sortOrder: 0,
       countsInBudget: true,
+      bucket: Bucket.everyday,
     );
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),

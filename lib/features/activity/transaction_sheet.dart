@@ -254,7 +254,10 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
           value: d.counts,
           onChanged: fixed
               ? null
-              : (on) => merchant != null && _applyAll ? db.setPayeeBudget(merchant, on) : db.setInBudget(t.id, on),
+              : (on) {
+                  final b = on ? Bucket.everyday : Bucket.outside;
+                  merchant != null && _applyAll ? db.setPayeeBucket(merchant, b) : db.setTxnBucket(t.id, b);
+                },
           title: const Text('Counts toward budget'),
           subtitle: Text(budgetSourceLabel(v)),
           secondary: const Icon(PhosphorIconsRegular.target),
@@ -273,8 +276,8 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
             padding: const EdgeInsets.only(left: 4),
             child: TextButton(
               onPressed: () async {
-                await db.setInBudget(t.id, null);
-                if (d.source == BudgetSource.payee && merchant != null) await db.setPayeeBudget(merchant, null);
+                await db.setTxnBucket(t.id, null);
+                if (d.source == BudgetSource.payee && merchant != null) await db.setPayeeBucket(merchant, null);
               },
               child: Text(v.category == null ? 'Reset' : 'Reset to ${v.category!.name} default'),
             ),
