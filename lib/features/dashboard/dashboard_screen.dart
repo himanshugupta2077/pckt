@@ -9,6 +9,7 @@ import '../../core/theme/palette.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
+import '../budgets/budget_providers.dart';
 import '../budgets/budget_widgets.dart';
 import '../stats.dart';
 import 'category_donut.dart';
@@ -23,6 +24,7 @@ class DashboardScreen extends ConsumerWidget {
     final txns = ref.watch(monthTxnsProvider);
     final sync = ref.watch(smsSyncProvider);
     final review = ref.watch(reviewCountProvider).value ?? 0;
+    final sortCount = ref.watch(toSortProvider).length;
 
     return Scaffold(
       body: SafeArea(
@@ -47,6 +49,7 @@ class DashboardScreen extends ConsumerWidget {
                           HeroCard(stats: stats, month: month),
                           const SizedBox(height: 12),
                           BudgetCard(hasSpending: stats.spent > 0),
+                          if (sortCount > 0) ...[const SizedBox(height: 12), _SortBanner(count: sortCount)],
                           if (review > 0) ...[const SizedBox(height: 12), _ReviewBanner(count: review)],
                           if (stats.unconverted > 0) ...[
                             const SizedBox(height: 12),
@@ -197,6 +200,31 @@ class _ReviewBanner extends StatelessWidget {
         Expanded(
           child: Text(
             '$count transaction${count == 1 ? '' : 's'} need${count == 1 ? 's' : ''} a quick look',
+            style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        const Icon(PhosphorIconsBold.caretRight, size: 18),
+      ],
+    ),
+  );
+}
+
+/// Payees and payments the app can't place in or out of the budget.
+class _SortBanner extends StatelessWidget {
+  const _SortBanner({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    onTap: () => context.push('/to-sort'),
+    child: Row(
+      children: [
+        Icon(PhosphorIconsFill.target, color: context.colors.onSurfaceVariant),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            '$count to sort for your budget',
             style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),

@@ -64,7 +64,10 @@ void main() {
       expect((t.amountMinor, t.currency, t.convertedMinor, t.convertedCurrency), (25000, 'INR', null, null));
       expect((await db.allAccounts()).single.currency, 'INR');
       expect((await db.allBudgets()).single.currency, 'INR');
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 4);
+      expect(
+        await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(),
+        db.schemaVersion,
+      );
       await db.close();
     } finally {
       await dir.delete(recursive: true);
@@ -278,7 +281,7 @@ void main() {
     test('CSV has the currency columns, with per-currency decimals', () async {
       final rows = decodeCsv(await DataExport(db).transactionsCsv());
       final h = rows.first;
-      expect(h.sublist(h.length - 3), ['currency', 'converted_amount', 'converted_currency']);
+      expect(h.sublist(10, 13), ['currency', 'converted_amount', 'converted_currency']);
       final byCurrency = {for (final r in rows.skip(1)) r[h.indexOf('currency')]: r};
       expect(byCurrency['USD']![1], '12.50');
       expect(byCurrency['USD']![h.indexOf('converted_amount')], '1045.30');

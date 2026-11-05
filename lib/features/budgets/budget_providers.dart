@@ -8,6 +8,7 @@ import '../../core/notifications.dart';
 import '../../data/db/database.dart';
 import '../../providers.dart';
 import 'budget_math.dart';
+import 'in_budget.dart';
 
 final budgetsProvider = StreamProvider<List<Budget>>((ref) {
   ref.watch(homeCurrencyProvider); // budgets apply per currency
@@ -26,6 +27,9 @@ final budgetProgressProvider = Provider<AsyncValue<List<BudgetProgress>>>((ref) 
   if (b == null || t == null || c == null) return const AsyncValue.loading();
   return AsyncValue.data(budgetProgress(budgets: b, txns: t, categories: c, month: month, now: DateTime.now()));
 });
+
+/// Payments that need a yes/no for the budget, one row per payee.
+final toSortProvider = Provider<List<SortItem>>((ref) => toSort(ref.watch(allTxnsProvider).value ?? const []));
 
 final notificationsProvider = Provider((ref) => LocalNotifications());
 

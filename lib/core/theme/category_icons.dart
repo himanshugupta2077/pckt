@@ -30,6 +30,7 @@ abstract final class CategoryIcons {
     'insurance': PhosphorIconsFill.shieldCheck,
     'transfer': PhosphorIconsFill.arrowsLeftRight,
     'people': PhosphorIconsFill.user,
+    'family': PhosphorIconsFill.usersThree,
     'salary': PhosphorIconsFill.briefcase,
     'refund': PhosphorIconsFill.arrowClockwise,
     'income': PhosphorIconsFill.handCoins,

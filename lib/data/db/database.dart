@@ -9,12 +9,14 @@ export 'tables.dart';
 
 part 'database.g.dart';
 
-/// A transaction joined with its category for list display.
+/// A transaction joined with its category, account and the learned rule
+/// for its merchant, for display and budget totals.
 class TxnView {
-  const TxnView(this.txn, this.category, this.account);
+  const TxnView(this.txn, this.category, this.account, [this.rule]);
   final Transaction txn;
   final Category? category;
   final Account? account;
+  final MerchantRule? rule;
 }
 
 extension TxnMoney on Transaction {
@@ -43,7 +45,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -55,6 +57,11 @@ class AppDatabase extends _$AppDatabase {
       await _seedCategories();
     },
     onUpgrade: (m, from, to) async {
+      // v5 columns before anything that writes categories or transactions.
+      if (from < 5) {
+        await _addColumnIfMissing(m, categories, categories.countsInBudget);
+        await _addColumnIfMissing(m, transactions, transactions.inBudget);
+      }
       // v3 first: later steps read categories with the new column.
       if (from < 3) {
         await m.addColumn(categories, categories.seedName);
@@ -75,6 +82,12 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, transactions, transactions.convertedCurrency);
         await _addColumnIfMissing(m, accounts, accounts.currency);
         await _addColumnIfMissing(m, budgets, budgets.currency);
+      }
+      // v5: "counts toward budget". Merchant rules may now carry only a
+      // budget answer, so their category becomes optional (a table rebuild).
+      if (from < 5) {
+        await m.alterTable(TableMigration(merchantRules, newColumns: [merchantRules.countsInBudget]));
+        await ensureBudgetSeeds();
       }
     },
     beforeOpen: (details) async {
@@ -100,6 +113,7 @@ class AppDatabase extends _$AppDatabase {
             isIncome: Value(c.isIncome),
             sortOrder: Value(i),
             seedName: Value(c.name),
+            countsInBudget: Value(c.countsInBudget),
           ),
         );
       }
@@ -121,9 +135,24 @@ class AppDatabase extends _$AppDatabase {
           isIncome: Value(c.isIncome),
           sortOrder: Value(i),
           seedName: Value(c.name),
+          countsInBudget: Value(c.countsInBudget),
         ),
       );
     }
+  }
+
+  /// Adds seed categories this install lacks (Family, from v5) and keeps
+  /// investments, loans, insurance, transfers and family out of the budget.
+  /// Run when upgrading to v5 and after restoring an older backup.
+  Future<void> ensureBudgetSeeds() async {
+    await _addMissingSeedCategories();
+    final outside = [
+      for (final c in defaultCategories)
+        if (!c.countsInBudget) c.name,
+    ];
+    await (update(
+      categories,
+    )..where((c) => c.seedName.isIn(outside))).write(const CategoriesCompanion(countsInBudget: Value(false)));
   }
 
   // ---------------------------------------------------------------- reads
@@ -165,33 +194,32 @@ class AppDatabase extends _$AppDatabase {
 
   /// Transactions in [from, to), newest first, joined with category/account.
   Stream<List<TxnView>> watchTxns({DateTime? from, DateTime? to, int? limit}) {
-    final q = select(transactions).join([
-      leftOuterJoin(categories, categories.id.equalsExp(transactions.categoryId)),
-      leftOuterJoin(accounts, accounts.id.equalsExp(transactions.accountId)),
-    ]);
+    final q = select(transactions).join(_viewJoins);
     if (from != null) q.where(transactions.occurredAt.isBiggerOrEqualValue(from));
     if (to != null) q.where(transactions.occurredAt.isSmallerThanValue(to));
     q.orderBy([OrderingTerm.desc(transactions.occurredAt), OrderingTerm.desc(transactions.id)]);
     if (limit != null) q.limit(limit);
-    return q.watch().map(
-      (rows) => [
-        for (final r in rows)
-          TxnView(r.readTable(transactions), r.readTableOrNull(categories), r.readTableOrNull(accounts)),
-      ],
-    );
+    return q.watch().map((rows) => [for (final r in rows) _view(r)]);
   }
 
   Stream<TxnView?> watchTxn(int id) {
-    final q = select(transactions).join([
-      leftOuterJoin(categories, categories.id.equalsExp(transactions.categoryId)),
-      leftOuterJoin(accounts, accounts.id.equalsExp(transactions.accountId)),
-    ])..where(transactions.id.equals(id));
-    return q.watchSingleOrNull().map(
-      (r) => r == null
-          ? null
-          : TxnView(r.readTable(transactions), r.readTableOrNull(categories), r.readTableOrNull(accounts)),
-    );
+    final q = select(transactions).join(_viewJoins)..where(transactions.id.equals(id));
+    return q.watchSingleOrNull().map((r) => r == null ? null : _view(r));
   }
+
+  // Rule patterns are stored lower-cased (see [setCategory]).
+  List<Join> get _viewJoins => [
+    leftOuterJoin(categories, categories.id.equalsExp(transactions.categoryId)),
+    leftOuterJoin(accounts, accounts.id.equalsExp(transactions.accountId)),
+    leftOuterJoin(merchantRules, merchantRules.pattern.equalsExp(transactions.merchant.lower())),
+  ];
+
+  TxnView _view(TypedResult r) => TxnView(
+    r.readTable(transactions),
+    r.readTableOrNull(categories),
+    r.readTableOrNull(accounts),
+    r.readTableOrNull(merchantRules),
+  );
 
   Stream<List<RawMessage>> watchSourcesFor(int txnId) =>
       (select(rawMessages)..where((m) => m.transactionId.equals(txnId))).watch();
@@ -266,7 +294,7 @@ class AppDatabase extends _$AppDatabase {
     );
     if (learnPattern != null && learnPattern.isNotEmpty && categoryId != null) {
       await into(merchantRules).insert(
-        MerchantRulesCompanion.insert(pattern: learnPattern, categoryId: categoryId),
+        MerchantRulesCompanion.insert(pattern: learnPattern, categoryId: Value(categoryId)),
         onConflict: DoUpdate(
           (_) => MerchantRulesCompanion(categoryId: Value(categoryId)),
           target: [merchantRules.pattern],
@@ -304,6 +332,29 @@ class AppDatabase extends _$AppDatabase {
   Future<void> confirm(int id) => (update(transactions)..where((t) => t.id.equals(id))).write(
     const TransactionsCompanion(status: Value(TxnStatus.confirmed), duplicateOfId: Value(null)),
   );
+
+  /// The user's answer to "counts toward budget?" for one payment; null
+  /// goes back to the payee rule / category.
+  Future<void> setInBudget(int id, bool? value) =>
+      (update(transactions)..where((t) => t.id.equals(id))).write(TransactionsCompanion(inBudget: Value(value)));
+
+  /// Whether payments to [merchant] count toward the budget (null removes
+  /// the answer). Payments to it that had their own answer follow the rule
+  /// from now on, so one switch decides for the payee.
+  Future<void> setPayeeBudget(String merchant, bool? value) => transaction(() async {
+    final pattern = merchant.toLowerCase();
+    if (pattern.isEmpty) return;
+    await into(merchantRules).insert(
+      MerchantRulesCompanion.insert(pattern: pattern, countsInBudget: Value(value)),
+      onConflict: DoUpdate(
+        (_) => MerchantRulesCompanion(countsInBudget: Value(value)),
+        target: [merchantRules.pattern],
+      ),
+    );
+    await (update(
+      transactions,
+    )..where((t) => t.merchant.lower().equals(pattern))).write(const TransactionsCompanion(inBudget: Value(null)));
+  });
 
   Future<void> setTransfer(int id, bool value) =>
       (update(transactions)..where((t) => t.id.equals(id))).write(TransactionsCompanion(isTransfer: Value(value)));
@@ -415,13 +466,19 @@ class AppDatabase extends _$AppDatabase {
       transactions,
     )..where((t) => t.merchant.lower().equals(oldKey))).write(TransactionsCompanion(merchant: Value(to.trim())));
     if (oldKey == newKey) return n;
-    final rules = {for (final r in await allMerchantRules()) r.pattern: r.categoryId};
+    final rules = {for (final r in await allMerchantRules()) r.pattern: r};
     final oldRule = rules[oldKey];
     if (oldRule != null && !rules.containsKey(newKey)) {
-      await into(merchantRules).insert(MerchantRulesCompanion.insert(pattern: newKey, categoryId: oldRule));
+      await into(merchantRules).insert(
+        MerchantRulesCompanion.insert(
+          pattern: newKey,
+          categoryId: Value(oldRule.categoryId),
+          countsInBudget: Value(oldRule.countsInBudget),
+        ),
+      );
     }
     // Renamed onto a merchant the user already taught: follow that rule.
-    final target = rules[newKey];
+    final target = rules[newKey]?.categoryId;
     if (target != null) {
       await (update(transactions)..where((t) => t.merchant.lower().equals(newKey) & t.categoryLocked.equals(false)))
           .write(TransactionsCompanion(categoryId: Value(target)));
@@ -501,13 +558,14 @@ class AppDatabase extends _$AppDatabase {
         );
       });
 
-  Future<void> updateCategory(int id, {String? name, String? icon, int? color, bool? isIncome}) =>
+  Future<void> updateCategory(int id, {String? name, String? icon, int? color, bool? isIncome, bool? countsInBudget}) =>
       (update(categories)..where((c) => c.id.equals(id))).write(
         CategoriesCompanion(
           name: name == null ? const Value.absent() : Value(name),
           icon: icon == null ? const Value.absent() : Value(icon),
           color: color == null ? const Value.absent() : Value(color),
           isIncome: isIncome == null ? const Value.absent() : Value(isIncome),
+          countsInBudget: countsInBudget == null ? const Value.absent() : Value(countsInBudget),
         ),
       );
 

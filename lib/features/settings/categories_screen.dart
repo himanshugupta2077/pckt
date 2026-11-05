@@ -64,7 +64,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
             child: Text(
-              'Drag to reorder. The order is used in pickers.',
+              _income
+                  ? 'Drag to reorder. The order is used in pickers.'
+                  : 'Switch off what isn\'t budget spend. Drag to reorder.',
               style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
             ),
           ),
@@ -76,18 +78,32 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
               onReorderItem: (from, to) => _reorder(all, shown, from, to),
               itemBuilder: (context, i) {
                 final c = shown[i];
+                final note = [
+                  if (AppDatabase.isProtected(c)) 'Built-in',
+                  if (!_income && !c.countsInBudget) 'Outside budget',
+                ];
                 return ListTile(
                   key: ValueKey(c.id),
                   leading: CategoryBadge(category: c, size: 40),
                   title: Text(c.name),
-                  subtitle: AppDatabase.isProtected(c) ? const Text('Built-in') : null,
+                  subtitle: note.isEmpty ? null : Text(note.join('  ·  ')),
                   onTap: () => showCategoryEditor(context, category: c),
-                  trailing: ReorderableDragStartListener(
-                    index: i,
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Icon(PhosphorIconsBold.dotsSixVertical, size: 20),
-                    ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!_income)
+                        Switch(
+                          value: c.countsInBudget,
+                          onChanged: (on) => ref.read(databaseProvider).updateCategory(c.id, countsInBudget: on),
+                        ),
+                      ReorderableDragStartListener(
+                        index: i,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(PhosphorIconsBold.dotsSixVertical, size: 20),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },
@@ -183,7 +199,15 @@ class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
   @override
   Widget build(BuildContext context) {
     final c = widget.category;
-    final preview = Category(id: -1, name: _name.text, icon: _icon, color: _color, isIncome: _income, sortOrder: 0);
+    final preview = Category(
+      id: -1,
+      name: _name.text,
+      icon: _icon,
+      color: _color,
+      isIncome: _income,
+      sortOrder: 0,
+      countsInBudget: true,
+    );
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: ListView(

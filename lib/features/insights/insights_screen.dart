@@ -12,6 +12,7 @@ import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../budgets/budget_math.dart';
 import '../budgets/budget_providers.dart';
+import '../budgets/in_budget.dart';
 import '../recurring/recurring_detector.dart';
 import '../recurring/recurring_screen.dart';
 import '../stats.dart';
@@ -41,7 +42,7 @@ class InsightsScreen extends ConsumerWidget {
         .toList();
     final merchants = topMerchants(monthTxns);
     final biggest = monthTxns
-        .where((v) => v.txn.direction == TxnDirection.debit && !v.txn.isTransfer && v.txn.homeMinor != null)
+        .where((v) => budgetDecision(v).counts && v.txn.homeMinor != null)
         .fold<TxnView?>(null, (b, v) => b == null || v.txn.homeMinor! > b.txn.homeMinor! ? v : b);
 
     return Scaffold(

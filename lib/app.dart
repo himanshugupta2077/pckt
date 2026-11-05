@@ -7,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'features/activity/activity_screen.dart';
 import 'features/assistant/assistant_screen.dart';
 import 'features/budgets/budgets_screen.dart';
+import 'features/budgets/to_sort_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/insights/insights_screen.dart';
 import 'features/lock/app_lock_gate.dart';
@@ -42,6 +43,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/email/connect', builder: (_, _) => const EmailConnectScreen()),
       GoRoute(path: '/llm', builder: (_, _) => const LlmSettingsScreen()),
       GoRoute(path: '/budgets', builder: (_, _) => const BudgetsScreen()),
+      GoRoute(path: '/to-sort', builder: (_, _) => const ToSortScreen()),
       GoRoute(path: '/recurring', builder: (_, _) => const RecurringScreen()),
       GoRoute(path: '/settings/accounts', builder: (_, _) => const AccountsScreen()),
       GoRoute(path: '/settings/categories', builder: (_, _) => const CategoriesScreen()),

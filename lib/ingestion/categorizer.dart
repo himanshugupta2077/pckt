@@ -13,7 +13,10 @@ class Categorizer {
         for (final c in categories)
           if (c.seedName != null) c.seedName!: c,
       },
-      _rules = {for (final r in rules) r.pattern: r.categoryId},
+      _rules = {
+        for (final r in rules)
+          if (r.categoryId != null) r.pattern: r.categoryId!,
+      },
       _keywords = [
         for (final seed in defaultCategories)
           for (final k in seed.keywords)

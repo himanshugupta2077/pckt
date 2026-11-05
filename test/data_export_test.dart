@@ -59,7 +59,9 @@ void main() {
       categoryId: cats.first.id,
       note: 'line one\nline two',
     );
-    await db.into(db.merchantRules).insert(MerchantRulesCompanion.insert(pattern: 'swiggy', categoryId: cats.first.id));
+    await db
+        .into(db.merchantRules)
+        .insert(MerchantRulesCompanion.insert(pattern: 'swiggy', categoryId: Value(cats.first.id)));
   });
   tearDown(() => db.close());
 

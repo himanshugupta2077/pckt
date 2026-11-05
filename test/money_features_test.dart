@@ -12,8 +12,8 @@ import 'package:pckt/ui/amount_field.dart';
 
 var _id = 0;
 
-Category cat(int id, String name, {bool income = false}) =>
-    Category(id: id, name: name, icon: 'other', color: 0, isIncome: income, sortOrder: id);
+Category cat(int id, String name, {bool income = false, bool counts = true}) =>
+    Category(id: id, name: name, icon: 'other', color: 0, isIncome: income, sortOrder: id, countsInBudget: counts);
 
 TxnView txn(
   int minor,

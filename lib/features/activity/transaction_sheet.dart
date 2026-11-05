@@ -10,6 +10,7 @@ import '../../providers.dart';
 import '../../ui/widgets.dart';
 import 'category_picker.dart';
 import 'conversion_sheet.dart';
+import '../budgets/in_budget.dart';
 import '../settings/manage_widgets.dart' show accountLabel;
 import 'edit_transaction_sheet.dart';
 
@@ -186,6 +187,7 @@ class TransactionSheet extends ConsumerWidget {
           subtitle: const Text('Excluded from spending and income'),
           secondary: const Icon(PhosphorIconsRegular.arrowsLeftRight),
         ),
+        _BudgetSection(view: view),
         const SizedBox(height: 12),
         SectionHeader('Sources (${sources.length})'),
         for (final s in sources) _SourceCard(message: s),
@@ -217,6 +219,66 @@ class TransactionSheet extends ConsumerWidget {
           icon: const Icon(PhosphorIconsRegular.trash),
           label: const Text('Delete'),
         ),
+      ],
+    );
+  }
+}
+
+/// "Counts toward budget" switch. With a merchant it answers for the payee
+/// (every payment to it) unless "Apply to all" is turned off.
+class _BudgetSection extends ConsumerStatefulWidget {
+  const _BudgetSection({required this.view});
+  final TxnView view;
+
+  @override
+  ConsumerState<_BudgetSection> createState() => _BudgetSectionState();
+}
+
+class _BudgetSectionState extends ConsumerState<_BudgetSection> {
+  var _applyAll = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.view;
+    final t = v.txn;
+    final db = ref.read(databaseProvider);
+    final d = budgetDecision(v);
+    final fixed = d.source == BudgetSource.transfer || d.source == BudgetSource.income;
+    final merchant = t.merchant;
+    final own = d.source == BudgetSource.manual || d.source == BudgetSource.payee;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          value: d.counts,
+          onChanged: fixed
+              ? null
+              : (on) => merchant != null && _applyAll ? db.setPayeeBudget(merchant, on) : db.setInBudget(t.id, on),
+          title: const Text('Counts toward budget'),
+          subtitle: Text(budgetSourceLabel(v)),
+          secondary: const Icon(PhosphorIconsRegular.target),
+        ),
+        if (!fixed && merchant != null)
+          CheckboxListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            value: _applyAll,
+            onChanged: (on) => setState(() => _applyAll = on ?? true),
+            title: Text('Apply to all $merchant'),
+          ),
+        if (!fixed && own)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: TextButton(
+              onPressed: () async {
+                await db.setInBudget(t.id, null);
+                if (d.source == BudgetSource.payee && merchant != null) await db.setPayeeBudget(merchant, null);
+              },
+              child: Text(v.category == null ? 'Reset' : 'Reset to ${v.category!.name} default'),
+            ),
+          ),
       ],
     );
   }

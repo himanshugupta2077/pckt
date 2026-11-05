@@ -52,6 +52,7 @@ abstract final class PhosphorIconsFill {
   static const trendDown = IconData(0xe4ac, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');
   static const trendUp = IconData(0xe4ae, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');
   static const user = IconData(0xe4c2, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');
+  static const usersThree = IconData(0xe68e, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');
   static const wallet = IconData(0xe68a, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');
   static const warningCircle = IconData(0xe4e2, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');
   static const wifiHigh = IconData(0xe4ea, fontFamily: 'PhosphorFill', fontPackage: 'phosphor_flutter');

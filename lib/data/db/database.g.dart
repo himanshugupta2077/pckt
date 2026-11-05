@@ -595,6 +595,21 @@ class $CategoriesTable extends Categories
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _countsInBudgetMeta = const VerificationMeta(
+    'countsInBudget',
+  );
+  @override
+  late final GeneratedColumn<bool> countsInBudget = GeneratedColumn<bool>(
+    'counts_in_budget',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("counts_in_budget" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -604,6 +619,7 @@ class $CategoriesTable extends Categories
     isIncome,
     sortOrder,
     seedName,
+    countsInBudget,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -662,6 +678,15 @@ class $CategoriesTable extends Categories
         seedName.isAcceptableOrUnknown(data['seed_name']!, _seedNameMeta),
       );
     }
+    if (data.containsKey('counts_in_budget')) {
+      context.handle(
+        _countsInBudgetMeta,
+        countsInBudget.isAcceptableOrUnknown(
+          data['counts_in_budget']!,
+          _countsInBudgetMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -699,6 +724,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.string,
         data['${effectivePrefix}seed_name'],
       ),
+      countsInBudget: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}counts_in_budget'],
+      )!,
     );
   }
 
@@ -721,6 +750,10 @@ class Category extends DataClass implements Insertable<Category> {
   /// Name of the seed category this row was created from (null for
   /// user-made ones). Keeps keyword rules working after a rename.
   final String? seedName;
+
+  /// Whether spends in this category count toward the monthly budget,
+  /// unless a payee rule or the transaction itself says otherwise.
+  final bool countsInBudget;
   const Category({
     required this.id,
     required this.name,
@@ -729,6 +762,7 @@ class Category extends DataClass implements Insertable<Category> {
     required this.isIncome,
     required this.sortOrder,
     this.seedName,
+    required this.countsInBudget,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -742,6 +776,7 @@ class Category extends DataClass implements Insertable<Category> {
     if (!nullToAbsent || seedName != null) {
       map['seed_name'] = Variable<String>(seedName);
     }
+    map['counts_in_budget'] = Variable<bool>(countsInBudget);
     return map;
   }
 
@@ -756,6 +791,7 @@ class Category extends DataClass implements Insertable<Category> {
       seedName: seedName == null && nullToAbsent
           ? const Value.absent()
           : Value(seedName),
+      countsInBudget: Value(countsInBudget),
     );
   }
 
@@ -772,6 +808,7 @@ class Category extends DataClass implements Insertable<Category> {
       isIncome: serializer.fromJson<bool>(json['isIncome']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       seedName: serializer.fromJson<String?>(json['seedName']),
+      countsInBudget: serializer.fromJson<bool>(json['countsInBudget']),
     );
   }
   @override
@@ -785,6 +822,7 @@ class Category extends DataClass implements Insertable<Category> {
       'isIncome': serializer.toJson<bool>(isIncome),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'seedName': serializer.toJson<String?>(seedName),
+      'countsInBudget': serializer.toJson<bool>(countsInBudget),
     };
   }
 
@@ -796,6 +834,7 @@ class Category extends DataClass implements Insertable<Category> {
     bool? isIncome,
     int? sortOrder,
     Value<String?> seedName = const Value.absent(),
+    bool? countsInBudget,
   }) => Category(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -804,6 +843,7 @@ class Category extends DataClass implements Insertable<Category> {
     isIncome: isIncome ?? this.isIncome,
     sortOrder: sortOrder ?? this.sortOrder,
     seedName: seedName.present ? seedName.value : this.seedName,
+    countsInBudget: countsInBudget ?? this.countsInBudget,
   );
   Category copyWithCompanion(CategoriesCompanion data) {
     return Category(
@@ -814,6 +854,9 @@ class Category extends DataClass implements Insertable<Category> {
       isIncome: data.isIncome.present ? data.isIncome.value : this.isIncome,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       seedName: data.seedName.present ? data.seedName.value : this.seedName,
+      countsInBudget: data.countsInBudget.present
+          ? data.countsInBudget.value
+          : this.countsInBudget,
     );
   }
 
@@ -826,14 +869,23 @@ class Category extends DataClass implements Insertable<Category> {
           ..write('color: $color, ')
           ..write('isIncome: $isIncome, ')
           ..write('sortOrder: $sortOrder, ')
-          ..write('seedName: $seedName')
+          ..write('seedName: $seedName, ')
+          ..write('countsInBudget: $countsInBudget')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, icon, color, isIncome, sortOrder, seedName);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    icon,
+    color,
+    isIncome,
+    sortOrder,
+    seedName,
+    countsInBudget,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -844,7 +896,8 @@ class Category extends DataClass implements Insertable<Category> {
           other.color == this.color &&
           other.isIncome == this.isIncome &&
           other.sortOrder == this.sortOrder &&
-          other.seedName == this.seedName);
+          other.seedName == this.seedName &&
+          other.countsInBudget == this.countsInBudget);
 }
 
 class CategoriesCompanion extends UpdateCompanion<Category> {
@@ -855,6 +908,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<bool> isIncome;
   final Value<int> sortOrder;
   final Value<String?> seedName;
+  final Value<bool> countsInBudget;
   const CategoriesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -863,6 +917,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     this.isIncome = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.seedName = const Value.absent(),
+    this.countsInBudget = const Value.absent(),
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
@@ -872,6 +927,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     this.isIncome = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.seedName = const Value.absent(),
+    this.countsInBudget = const Value.absent(),
   }) : name = Value(name),
        icon = Value(icon),
        color = Value(color);
@@ -883,6 +939,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Expression<bool>? isIncome,
     Expression<int>? sortOrder,
     Expression<String>? seedName,
+    Expression<bool>? countsInBudget,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -892,6 +949,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       if (isIncome != null) 'is_income': isIncome,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (seedName != null) 'seed_name': seedName,
+      if (countsInBudget != null) 'counts_in_budget': countsInBudget,
     });
   }
 
@@ -903,6 +961,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<bool>? isIncome,
     Value<int>? sortOrder,
     Value<String?>? seedName,
+    Value<bool>? countsInBudget,
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
@@ -912,6 +971,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       isIncome: isIncome ?? this.isIncome,
       sortOrder: sortOrder ?? this.sortOrder,
       seedName: seedName ?? this.seedName,
+      countsInBudget: countsInBudget ?? this.countsInBudget,
     );
   }
 
@@ -939,6 +999,9 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     if (seedName.present) {
       map['seed_name'] = Variable<String>(seedName.value);
     }
+    if (countsInBudget.present) {
+      map['counts_in_budget'] = Variable<bool>(countsInBudget.value);
+    }
     return map;
   }
 
@@ -951,7 +1014,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
           ..write('color: $color, ')
           ..write('isIncome: $isIncome, ')
           ..write('sortOrder: $sortOrder, ')
-          ..write('seedName: $seedName')
+          ..write('seedName: $seedName, ')
+          ..write('countsInBudget: $countsInBudget')
           ..write(')'))
         .toString();
   }
@@ -1194,6 +1258,20 @@ class $TransactionsTable extends Transactions
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _inBudgetMeta = const VerificationMeta(
+    'inBudget',
+  );
+  @override
+  late final GeneratedColumn<bool> inBudget = GeneratedColumn<bool>(
+    'in_budget',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("in_budget" IN (0, 1))',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1216,6 +1294,7 @@ class $TransactionsTable extends Transactions
     categoryLocked,
     duplicateOfId,
     createdAt,
+    inBudget,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1353,6 +1432,12 @@ class $TransactionsTable extends Transactions
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('in_budget')) {
+      context.handle(
+        _inBudgetMeta,
+        inBudget.isAcceptableOrUnknown(data['in_budget']!, _inBudgetMeta),
+      );
+    }
     return context;
   }
 
@@ -1448,6 +1533,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      inBudget: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}in_budget'],
+      ),
     );
   }
 
@@ -1503,6 +1592,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// Set when dedup found a borderline match the user should confirm.
   final int? duplicateOfId;
   final DateTime createdAt;
+
+  /// The user's own answer to "counts toward budget?" for this payment.
+  /// Null = follow the payee rule, then the category.
+  final bool? inBudget;
   const Transaction({
     required this.id,
     required this.amountMinor,
@@ -1524,6 +1617,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.categoryLocked,
     this.duplicateOfId,
     required this.createdAt,
+    this.inBudget,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1580,6 +1674,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       map['duplicate_of_id'] = Variable<int>(duplicateOfId);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || inBudget != null) {
+      map['in_budget'] = Variable<bool>(inBudget);
+    }
     return map;
   }
 
@@ -1623,6 +1720,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ? const Value.absent()
           : Value(duplicateOfId),
       createdAt: Value(createdAt),
+      inBudget: inBudget == null && nullToAbsent
+          ? const Value.absent()
+          : Value(inBudget),
     );
   }
 
@@ -1660,6 +1760,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       categoryLocked: serializer.fromJson<bool>(json['categoryLocked']),
       duplicateOfId: serializer.fromJson<int?>(json['duplicateOfId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      inBudget: serializer.fromJson<bool?>(json['inBudget']),
     );
   }
   @override
@@ -1692,6 +1793,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'categoryLocked': serializer.toJson<bool>(categoryLocked),
       'duplicateOfId': serializer.toJson<int?>(duplicateOfId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'inBudget': serializer.toJson<bool?>(inBudget),
     };
   }
 
@@ -1716,6 +1818,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     bool? categoryLocked,
     Value<int?> duplicateOfId = const Value.absent(),
     DateTime? createdAt,
+    Value<bool?> inBudget = const Value.absent(),
   }) => Transaction(
     id: id ?? this.id,
     amountMinor: amountMinor ?? this.amountMinor,
@@ -1743,6 +1846,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         ? duplicateOfId.value
         : this.duplicateOfId,
     createdAt: createdAt ?? this.createdAt,
+    inBudget: inBudget.present ? inBudget.value : this.inBudget,
   );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -1786,6 +1890,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ? data.duplicateOfId.value
           : this.duplicateOfId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      inBudget: data.inBudget.present ? data.inBudget.value : this.inBudget,
     );
   }
 
@@ -1811,13 +1916,14 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('isTransfer: $isTransfer, ')
           ..write('categoryLocked: $categoryLocked, ')
           ..write('duplicateOfId: $duplicateOfId, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('inBudget: $inBudget')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     amountMinor,
     currency,
@@ -1838,7 +1944,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     categoryLocked,
     duplicateOfId,
     createdAt,
-  );
+    inBudget,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1862,7 +1969,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.isTransfer == this.isTransfer &&
           other.categoryLocked == this.categoryLocked &&
           other.duplicateOfId == this.duplicateOfId &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.inBudget == this.inBudget);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -1886,6 +1994,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<bool> categoryLocked;
   final Value<int?> duplicateOfId;
   final Value<DateTime> createdAt;
+  final Value<bool?> inBudget;
   const TransactionsCompanion({
     this.id = const Value.absent(),
     this.amountMinor = const Value.absent(),
@@ -1907,6 +2016,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.categoryLocked = const Value.absent(),
     this.duplicateOfId = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.inBudget = const Value.absent(),
   });
   TransactionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1929,6 +2039,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.categoryLocked = const Value.absent(),
     this.duplicateOfId = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.inBudget = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        direction = Value(direction),
        occurredAt = Value(occurredAt),
@@ -1955,6 +2066,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<bool>? categoryLocked,
     Expression<int>? duplicateOfId,
     Expression<DateTime>? createdAt,
+    Expression<bool>? inBudget,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1977,6 +2089,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (categoryLocked != null) 'category_locked': categoryLocked,
       if (duplicateOfId != null) 'duplicate_of_id': duplicateOfId,
       if (createdAt != null) 'created_at': createdAt,
+      if (inBudget != null) 'in_budget': inBudget,
     });
   }
 
@@ -2001,6 +2114,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<bool>? categoryLocked,
     Value<int?>? duplicateOfId,
     Value<DateTime>? createdAt,
+    Value<bool?>? inBudget,
   }) {
     return TransactionsCompanion(
       id: id ?? this.id,
@@ -2023,6 +2137,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       categoryLocked: categoryLocked ?? this.categoryLocked,
       duplicateOfId: duplicateOfId ?? this.duplicateOfId,
       createdAt: createdAt ?? this.createdAt,
+      inBudget: inBudget ?? this.inBudget,
     );
   }
 
@@ -2095,6 +2210,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (inBudget.present) {
+      map['in_budget'] = Variable<bool>(inBudget.value);
+    }
     return map;
   }
 
@@ -2120,7 +2238,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('isTransfer: $isTransfer, ')
           ..write('categoryLocked: $categoryLocked, ')
           ..write('duplicateOfId: $duplicateOfId, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('inBudget: $inBudget')
           ..write(')'))
         .toString();
   }
@@ -2801,15 +2920,34 @@ class $MerchantRulesTable extends MerchantRules
   late final GeneratedColumn<int> categoryId = GeneratedColumn<int>(
     'category_id',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'REFERENCES categories (id) ON DELETE CASCADE',
     ),
   );
+  static const VerificationMeta _countsInBudgetMeta = const VerificationMeta(
+    'countsInBudget',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, pattern, categoryId];
+  late final GeneratedColumn<bool> countsInBudget = GeneratedColumn<bool>(
+    'counts_in_budget',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("counts_in_budget" IN (0, 1))',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    pattern,
+    categoryId,
+    countsInBudget,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2838,8 +2976,15 @@ class $MerchantRulesTable extends MerchantRules
         _categoryIdMeta,
         categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
       );
-    } else if (isInserting) {
-      context.missing(_categoryIdMeta);
+    }
+    if (data.containsKey('counts_in_budget')) {
+      context.handle(
+        _countsInBudgetMeta,
+        countsInBudget.isAcceptableOrUnknown(
+          data['counts_in_budget']!,
+          _countsInBudgetMeta,
+        ),
+      );
     }
     return context;
   }
@@ -2861,7 +3006,11 @@ class $MerchantRulesTable extends MerchantRules
       categoryId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}category_id'],
-      )!,
+      ),
+      countsInBudget: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}counts_in_budget'],
+      ),
     );
   }
 
@@ -2874,18 +3023,25 @@ class $MerchantRulesTable extends MerchantRules
 class MerchantRule extends DataClass implements Insertable<MerchantRule> {
   final int id;
   final String pattern;
-  final int categoryId;
+  final int? categoryId;
+  final bool? countsInBudget;
   const MerchantRule({
     required this.id,
     required this.pattern,
-    required this.categoryId,
+    this.categoryId,
+    this.countsInBudget,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['pattern'] = Variable<String>(pattern);
-    map['category_id'] = Variable<int>(categoryId);
+    if (!nullToAbsent || categoryId != null) {
+      map['category_id'] = Variable<int>(categoryId);
+    }
+    if (!nullToAbsent || countsInBudget != null) {
+      map['counts_in_budget'] = Variable<bool>(countsInBudget);
+    }
     return map;
   }
 
@@ -2893,7 +3049,12 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
     return MerchantRulesCompanion(
       id: Value(id),
       pattern: Value(pattern),
-      categoryId: Value(categoryId),
+      categoryId: categoryId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoryId),
+      countsInBudget: countsInBudget == null && nullToAbsent
+          ? const Value.absent()
+          : Value(countsInBudget),
     );
   }
 
@@ -2905,7 +3066,8 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
     return MerchantRule(
       id: serializer.fromJson<int>(json['id']),
       pattern: serializer.fromJson<String>(json['pattern']),
-      categoryId: serializer.fromJson<int>(json['categoryId']),
+      categoryId: serializer.fromJson<int?>(json['categoryId']),
+      countsInBudget: serializer.fromJson<bool?>(json['countsInBudget']),
     );
   }
   @override
@@ -2914,16 +3076,24 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'pattern': serializer.toJson<String>(pattern),
-      'categoryId': serializer.toJson<int>(categoryId),
+      'categoryId': serializer.toJson<int?>(categoryId),
+      'countsInBudget': serializer.toJson<bool?>(countsInBudget),
     };
   }
 
-  MerchantRule copyWith({int? id, String? pattern, int? categoryId}) =>
-      MerchantRule(
-        id: id ?? this.id,
-        pattern: pattern ?? this.pattern,
-        categoryId: categoryId ?? this.categoryId,
-      );
+  MerchantRule copyWith({
+    int? id,
+    String? pattern,
+    Value<int?> categoryId = const Value.absent(),
+    Value<bool?> countsInBudget = const Value.absent(),
+  }) => MerchantRule(
+    id: id ?? this.id,
+    pattern: pattern ?? this.pattern,
+    categoryId: categoryId.present ? categoryId.value : this.categoryId,
+    countsInBudget: countsInBudget.present
+        ? countsInBudget.value
+        : this.countsInBudget,
+  );
   MerchantRule copyWithCompanion(MerchantRulesCompanion data) {
     return MerchantRule(
       id: data.id.present ? data.id.value : this.id,
@@ -2931,6 +3101,9 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
       categoryId: data.categoryId.present
           ? data.categoryId.value
           : this.categoryId,
+      countsInBudget: data.countsInBudget.present
+          ? data.countsInBudget.value
+          : this.countsInBudget,
     );
   }
 
@@ -2939,58 +3112,66 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
     return (StringBuffer('MerchantRule(')
           ..write('id: $id, ')
           ..write('pattern: $pattern, ')
-          ..write('categoryId: $categoryId')
+          ..write('categoryId: $categoryId, ')
+          ..write('countsInBudget: $countsInBudget')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, pattern, categoryId);
+  int get hashCode => Object.hash(id, pattern, categoryId, countsInBudget);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is MerchantRule &&
           other.id == this.id &&
           other.pattern == this.pattern &&
-          other.categoryId == this.categoryId);
+          other.categoryId == this.categoryId &&
+          other.countsInBudget == this.countsInBudget);
 }
 
 class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
   final Value<int> id;
   final Value<String> pattern;
-  final Value<int> categoryId;
+  final Value<int?> categoryId;
+  final Value<bool?> countsInBudget;
   const MerchantRulesCompanion({
     this.id = const Value.absent(),
     this.pattern = const Value.absent(),
     this.categoryId = const Value.absent(),
+    this.countsInBudget = const Value.absent(),
   });
   MerchantRulesCompanion.insert({
     this.id = const Value.absent(),
     required String pattern,
-    required int categoryId,
-  }) : pattern = Value(pattern),
-       categoryId = Value(categoryId);
+    this.categoryId = const Value.absent(),
+    this.countsInBudget = const Value.absent(),
+  }) : pattern = Value(pattern);
   static Insertable<MerchantRule> custom({
     Expression<int>? id,
     Expression<String>? pattern,
     Expression<int>? categoryId,
+    Expression<bool>? countsInBudget,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (pattern != null) 'pattern': pattern,
       if (categoryId != null) 'category_id': categoryId,
+      if (countsInBudget != null) 'counts_in_budget': countsInBudget,
     });
   }
 
   MerchantRulesCompanion copyWith({
     Value<int>? id,
     Value<String>? pattern,
-    Value<int>? categoryId,
+    Value<int?>? categoryId,
+    Value<bool?>? countsInBudget,
   }) {
     return MerchantRulesCompanion(
       id: id ?? this.id,
       pattern: pattern ?? this.pattern,
       categoryId: categoryId ?? this.categoryId,
+      countsInBudget: countsInBudget ?? this.countsInBudget,
     );
   }
 
@@ -3006,6 +3187,9 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
     if (categoryId.present) {
       map['category_id'] = Variable<int>(categoryId.value);
     }
+    if (countsInBudget.present) {
+      map['counts_in_budget'] = Variable<bool>(countsInBudget.value);
+    }
     return map;
   }
 
@@ -3014,7 +3198,8 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
     return (StringBuffer('MerchantRulesCompanion(')
           ..write('id: $id, ')
           ..write('pattern: $pattern, ')
-          ..write('categoryId: $categoryId')
+          ..write('categoryId: $categoryId, ')
+          ..write('countsInBudget: $countsInBudget')
           ..write(')'))
         .toString();
   }
@@ -3837,6 +4022,7 @@ typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
   Value<bool> isIncome,
   Value<int> sortOrder,
   Value<String?> seedName,
+  Value<bool> countsInBudget,
 });
 typedef $$CategoriesTableUpdateCompanionBuilder = CategoriesCompanion Function({
   Value<int> id,
@@ -3846,6 +4032,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder = CategoriesCompanion Function({
   Value<bool> isIncome,
   Value<int> sortOrder,
   Value<String?> seedName,
+  Value<bool> countsInBudget,
 });
 
 final class $$CategoriesTableReferences
@@ -3949,6 +4136,11 @@ class $$CategoriesTableFilterComposer
 
   ColumnFilters<String> get seedName => $composableBuilder(
     column: $table.seedName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get countsInBudget => $composableBuilder(
+    column: $table.countsInBudget,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4071,6 +4263,11 @@ class $$CategoriesTableOrderingComposer
     column: $table.seedName,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get countsInBudget => $composableBuilder(
+    column: $table.countsInBudget,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CategoriesTableAnnotationComposer
@@ -4102,6 +4299,11 @@ class $$CategoriesTableAnnotationComposer
 
   GeneratedColumn<String> get seedName =>
       $composableBuilder(column: $table.seedName, builder: (column) => column);
+
+  GeneratedColumn<bool> get countsInBudget => $composableBuilder(
+    column: $table.countsInBudget,
+    builder: (column) => column,
+  );
 
   Expression<T> transactionsRefs<T extends Object>(
     Expression<T> Function($$TransactionsTableAnnotationComposer a) f,
@@ -4218,6 +4420,7 @@ class $$CategoriesTableTableManager
                 Value<bool> isIncome = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<String?> seedName = const Value.absent(),
+                Value<bool> countsInBudget = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
                 name: name,
@@ -4226,6 +4429,7 @@ class $$CategoriesTableTableManager
                 isIncome: isIncome,
                 sortOrder: sortOrder,
                 seedName: seedName,
+                countsInBudget: countsInBudget,
               ),
           createCompanionCallback:
               ({
@@ -4236,6 +4440,7 @@ class $$CategoriesTableTableManager
                 Value<bool> isIncome = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<String?> seedName = const Value.absent(),
+                Value<bool> countsInBudget = const Value.absent(),
               }) => CategoriesCompanion.insert(
                 id: id,
                 name: name,
@@ -4244,6 +4449,7 @@ class $$CategoriesTableTableManager
                 isIncome: isIncome,
                 sortOrder: sortOrder,
                 seedName: seedName,
+                countsInBudget: countsInBudget,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -4380,6 +4586,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<bool> categoryLocked,
       Value<int?> duplicateOfId,
       Value<DateTime> createdAt,
+      Value<bool?> inBudget,
     });
 typedef $$TransactionsTableUpdateCompanionBuilder =
     TransactionsCompanion Function({
@@ -4403,6 +4610,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<bool> categoryLocked,
       Value<int?> duplicateOfId,
       Value<DateTime> createdAt,
+      Value<bool?> inBudget,
     });
 
 final class $$TransactionsTableReferences
@@ -4561,6 +4769,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get inBudget => $composableBuilder(
+    column: $table.inBudget,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4735,6 +4948,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get inBudget => $composableBuilder(
+    column: $table.inBudget,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4863,6 +5081,9 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
+  GeneratedColumn<bool> get inBudget =>
+      $composableBuilder(column: $table.inBudget, builder: (column) => column);
+
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -4987,6 +5208,7 @@ class $$TransactionsTableTableManager
                 Value<bool> categoryLocked = const Value.absent(),
                 Value<int?> duplicateOfId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<bool?> inBudget = const Value.absent(),
               }) => TransactionsCompanion(
                 id: id,
                 amountMinor: amountMinor,
@@ -5008,6 +5230,7 @@ class $$TransactionsTableTableManager
                 categoryLocked: categoryLocked,
                 duplicateOfId: duplicateOfId,
                 createdAt: createdAt,
+                inBudget: inBudget,
               ),
           createCompanionCallback:
               ({
@@ -5031,6 +5254,7 @@ class $$TransactionsTableTableManager
                 Value<bool> categoryLocked = const Value.absent(),
                 Value<int?> duplicateOfId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<bool?> inBudget = const Value.absent(),
               }) => TransactionsCompanion.insert(
                 id: id,
                 amountMinor: amountMinor,
@@ -5052,6 +5276,7 @@ class $$TransactionsTableTableManager
                 categoryLocked: categoryLocked,
                 duplicateOfId: duplicateOfId,
                 createdAt: createdAt,
+                inBudget: inBudget,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -5584,13 +5809,15 @@ typedef $$MerchantRulesTableCreateCompanionBuilder =
     MerchantRulesCompanion Function({
       Value<int> id,
       required String pattern,
-      required int categoryId,
+      Value<int?> categoryId,
+      Value<bool?> countsInBudget,
     });
 typedef $$MerchantRulesTableUpdateCompanionBuilder =
     MerchantRulesCompanion Function({
       Value<int> id,
       Value<String> pattern,
-      Value<int> categoryId,
+      Value<int?> categoryId,
+      Value<bool?> countsInBudget,
     });
 
 final class $$MerchantRulesTableReferences
@@ -5604,9 +5831,9 @@ final class $$MerchantRulesTableReferences
   static $CategoriesTable _categoryIdTable(_$AppDatabase db) =>
       db.categories.createAlias('merchant_rules__category_id__categories__id');
 
-  $$CategoriesTableProcessedTableManager get categoryId {
-    final $_column = $_itemColumn<int>('category_id')!;
-
+  $$CategoriesTableProcessedTableManager? get categoryId {
+    final $_column = $_itemColumn<int>('category_id');
+    if ($_column == null) return null;
     final manager = $$CategoriesTableTableManager(
       $_db,
       $_db.categories,
@@ -5635,6 +5862,11 @@ class $$MerchantRulesTableFilterComposer
 
   ColumnFilters<String> get pattern => $composableBuilder(
     column: $table.pattern,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get countsInBudget => $composableBuilder(
+    column: $table.countsInBudget,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5681,6 +5913,11 @@ class $$MerchantRulesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get countsInBudget => $composableBuilder(
+    column: $table.countsInBudget,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -5719,6 +5956,11 @@ class $$MerchantRulesTableAnnotationComposer
 
   GeneratedColumn<String> get pattern =>
       $composableBuilder(column: $table.pattern, builder: (column) => column);
+
+  GeneratedColumn<bool> get countsInBudget => $composableBuilder(
+    column: $table.countsInBudget,
+    builder: (column) => column,
+  );
 
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
@@ -5774,21 +6016,25 @@ class $$MerchantRulesTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> pattern = const Value.absent(),
-                Value<int> categoryId = const Value.absent(),
+                Value<int?> categoryId = const Value.absent(),
+                Value<bool?> countsInBudget = const Value.absent(),
               }) => MerchantRulesCompanion(
                 id: id,
                 pattern: pattern,
                 categoryId: categoryId,
+                countsInBudget: countsInBudget,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 required String pattern,
-                required int categoryId,
+                Value<int?> categoryId = const Value.absent(),
+                Value<bool?> countsInBudget = const Value.absent(),
               }) => MerchantRulesCompanion.insert(
                 id: id,
                 pattern: pattern,
                 categoryId: categoryId,
+                countsInBudget: countsInBudget,
               ),
           withReferenceMapper: (p0) => p0
               .map(

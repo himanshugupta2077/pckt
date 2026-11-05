@@ -1,12 +1,23 @@
 import '../../core/theme/palette.dart';
 
 class CategorySeed {
-  const CategorySeed(this.name, this.icon, this.colorIndex, {this.isIncome = false, this.keywords = const []});
+  const CategorySeed(
+    this.name,
+    this.icon,
+    this.colorIndex, {
+    this.isIncome = false,
+    this.keywords = const [],
+    this.countsInBudget = true,
+  });
 
   final String name;
   final String icon;
   final int colorIndex;
   final bool isIncome;
+
+  /// False for money that leaves but isn't spending (investments, loans,
+  /// transfers, family support).
+  final bool countsInBudget;
 
   /// Lower-case merchant/VPA fragments that map to this category out of the box.
   final List<String> keywords;
@@ -254,6 +265,7 @@ const defaultCategories = <CategorySeed>[
     'Investments',
     'investments',
     2,
+    countsInBudget: false,
     keywords: [
       'indian clearing corp', // ICCL — mutual fund SIP NACH debits
       'iccl',
@@ -274,6 +286,7 @@ const defaultCategories = <CategorySeed>[
     'Insurance',
     'insurance',
     0,
+    countsInBudget: false,
     keywords: [
       'lic of india',
       'lic',
@@ -294,11 +307,13 @@ const defaultCategories = <CategorySeed>[
     'Loans & EMI',
     'emi',
     1,
+    countsInBudget: false,
     keywords: ['emi', 'loan', 'bajaj finance', 'home credit', 'credit card payment', 'cred'],
   ),
   CategorySeed('People', 'people', -1),
+  CategorySeed('Family', 'family', 6, countsInBudget: false),
   CategorySeed('Cash Withdrawal', 'cash', 5, keywords: ['atm', 'cash withdrawal']),
-  CategorySeed('Transfers', 'transfer', -1),
+  CategorySeed('Transfers', 'transfer', -1, countsInBudget: false),
   CategorySeed('Other', 'other', -1),
   // Income
   CategorySeed('Salary', 'salary', 2, isIncome: true, keywords: ['salary', 'payroll', 'sal cr']),

@@ -183,7 +183,15 @@ Reply with ONLY JSON: {"results":[{"id":<id>,"category":"<name>","confidence":<0
             db.merchantRules,
           )..where((x) => x.pattern.equals(pattern))).getSingleOrNull();
           if (existing == null) {
-            await db.into(db.merchantRules).insert(MerchantRulesCompanion.insert(pattern: pattern, categoryId: cat.id));
+            await db
+                .into(db.merchantRules)
+                .insert(MerchantRulesCompanion.insert(pattern: pattern, categoryId: Value(cat.id)));
+            report.rulesLearned++;
+          } else if (existing.categoryId == null) {
+            // The user only answered "counts toward budget?" for this payee.
+            await (db.update(
+              db.merchantRules,
+            )..where((x) => x.id.equals(existing.id))).write(MerchantRulesCompanion(categoryId: Value(cat.id)));
             report.rulesLearned++;
           }
         }

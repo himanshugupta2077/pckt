@@ -1,4 +1,5 @@
 import '../data/db/database.dart';
+import 'budgets/in_budget.dart';
 
 class CategoryTotal {
   const CategoryTotal(this.category, this.amount);
@@ -6,9 +7,11 @@ class CategoryTotal {
   final int amount;
 }
 
-/// Aggregates for one month, in the home currency. Transfers are excluded
-/// everywhere; foreign transactions count once they have a home-currency
-/// amount and are tallied in [unconverted] until then.
+/// Aggregates for one month, in the home currency. [spent], [count],
+/// [daily] and [categories] cover budget spend only ([budgetDecision]);
+/// other debits (investments, loans, family…) add up in [outside].
+/// Transfers are excluded everywhere; foreign transactions count once they
+/// have a home-currency amount and are tallied in [unconverted] until then.
 class MonthStats {
   MonthStats(List<TxnView> txns, DateTime month)
     : daily = List.filled(DateTime(month.year, month.month + 1, 0).day, 0) {
@@ -25,6 +28,10 @@ class MonthStats {
         income += amount;
         continue;
       }
+      if (!budgetDecision(v).counts) {
+        outside += amount;
+        continue;
+      }
       spent += amount;
       count++;
       if (t.occurredAt.year == month.year && t.occurredAt.month == month.month) {
@@ -37,6 +44,9 @@ class MonthStats {
   }
 
   int spent = 0;
+
+  /// Debits that don't count toward the budget.
+  int outside = 0;
   int income = 0;
   int count = 0;
 
@@ -62,7 +72,7 @@ List<MerchantTotal> topMerchants(List<TxnView> txns, {int take = 5}) {
   for (final v in txns) {
     final t = v.txn;
     final amount = t.homeMinor;
-    if (t.isTransfer || t.direction == TxnDirection.credit || t.merchant == null || amount == null) continue;
+    if (!budgetDecision(v).counts || t.merchant == null || amount == null) continue;
     final p = m[t.merchant!];
     m[t.merchant!] = ((p?.$1 ?? 0) + amount, (p?.$2 ?? 0) + 1, v.category);
   }

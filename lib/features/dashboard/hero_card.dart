@@ -8,7 +8,8 @@ import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
 import '../stats.dart';
 
-/// Gradient summary card: month spend as the hero number, income/net pills,
+/// Gradient summary card: month budget spend as the hero number (with what
+/// stayed outside the budget under it), income/net pills,
 /// and a daily-spend bar strip (single series — the title names it).
 class HeroCard extends StatelessWidget {
   const HeroCard({super.key, required this.stats, required this.month});
@@ -55,6 +56,11 @@ class HeroCard extends StatelessWidget {
               ),
             ),
           ),
+          if (stats.outside > 0)
+            Text(
+              '${money(stats.outside)} outside budget',
+              style: context.text.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.7)),
+            ),
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,

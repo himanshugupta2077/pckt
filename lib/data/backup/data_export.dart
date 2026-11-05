@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/currency.dart';
+import '../../features/budgets/in_budget.dart';
 import '../db/database.dart';
 
 /// Thrown when a file is not a usable Pckt backup. [message] is user-facing.
@@ -35,7 +36,7 @@ class BackupSummary {
 /// in later schema versions. Restore accepts backups from the same or an
 /// older schema; unknown columns are dropped and missing ones take their
 /// defaults (so a backup from before v4 restores with every amount in INR,
-/// which is what it was).
+/// which is what it was; one from before v5 gets the budget defaults).
 class DataExport {
   DataExport(this.db);
 
@@ -62,6 +63,8 @@ class DataExport {
     'currency',
     'converted_amount',
     'converted_currency',
+    // Added with budgets: "yes" when the payment counts toward the budget.
+    'counts_in_budget',
   ];
 
   // ------------------------------------------------------------------ CSV
@@ -71,7 +74,8 @@ class DataExport {
   /// KWD); `converted_amount` is the same payment in `converted_currency`
   /// when known.
   Future<String> transactionsCsv() async {
-    final cats = {for (final c in await db.allCategories()) c.id: c.name};
+    final cats = {for (final c in await db.allCategories()) c.id: c};
+    final rules = {for (final r in await db.allMerchantRules()) r.pattern: r};
     final accts = {for (final a in await db.allAccounts()) a.id: a};
     final sources = <int, Set<String>>{};
     for (final m in await (db.select(db.rawMessages)..where((m) => m.transactionId.isNotNull())).get()) {
@@ -89,7 +93,7 @@ class DataExport {
           plainAmount(t.amountMinor, t.currency),
           t.direction.name,
           t.merchant ?? '',
-          cats[t.categoryId] ?? '',
+          cats[t.categoryId]?.name ?? '',
           switch (accts[t.accountId]) {
             null => '',
             final a => a.last4 == null ? a.name : '${a.name} ••${a.last4}',
@@ -103,6 +107,7 @@ class DataExport {
               ? ''
               : plainAmount(t.convertedMinor!, t.convertedCurrency!),
           t.convertedMinor == null ? '' : t.convertedCurrency ?? '',
+          budgetDecision(TxnView(t, cats[t.categoryId], null, rules[t.merchant?.toLowerCase()])).counts ? 'yes' : 'no',
         ],
     ];
     return encodeCsv(rows);
@@ -157,6 +162,7 @@ class DataExport {
           );
         }
       }
+      if (summary.schemaVersion < 5) await db.ensureBudgetSeeds();
     });
     return summary;
   }

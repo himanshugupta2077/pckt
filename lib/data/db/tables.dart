@@ -44,6 +44,10 @@ class Categories extends Table {
   /// Name of the seed category this row was created from (null for
   /// user-made ones). Keeps keyword rules working after a rename.
   TextColumn get seedName => text().nullable()();
+
+  /// Whether spends in this category count toward the monthly budget,
+  /// unless a payee rule or the transaction itself says otherwise.
+  BoolColumn get countsInBudget => boolean().withDefault(const Constant(true))();
 }
 
 class Transactions extends Table {
@@ -85,6 +89,10 @@ class Transactions extends Table {
   /// Set when dedup found a borderline match the user should confirm.
   IntColumn get duplicateOfId => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// The user's own answer to "counts toward budget?" for this payment.
+  /// Null = follow the payee rule, then the category.
+  BoolColumn get inBudget => boolean().nullable()();
 }
 
 /// Every SMS / email we have looked at, parsed or not. Keeping the raw
@@ -128,10 +136,12 @@ class Budgets extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-/// Learned "merchant → category" mappings, created when the user
-/// recategorises a transaction.
+/// Learned per-merchant rules: a category (set when the user recategorises
+/// a transaction) and/or whether the payee counts toward the budget. Either
+/// may be null on its own.
 class MerchantRules extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get pattern => text().unique()();
-  IntColumn get categoryId => integer().references(Categories, #id, onDelete: KeyAction.cascade)();
+  IntColumn get categoryId => integer().nullable().references(Categories, #id, onDelete: KeyAction.cascade)();
+  BoolColumn get countsInBudget => boolean().nullable()();
 }
