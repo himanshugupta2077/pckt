@@ -7,6 +7,7 @@ import '../../core/theme/palette.dart';
 import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
+import '../budgets/bucket_picker.dart';
 import 'manage_widgets.dart';
 
 class CategoriesScreen extends ConsumerStatefulWidget {
@@ -66,7 +67,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             child: Text(
               _income
                   ? 'Drag to reorder. The order is used in pickers.'
-                  : 'Switch off what isn\'t budget spend. Drag to reorder.',
+                  : 'Pick a bucket for each. Only Everyday counts toward the budget. Drag to reorder.',
               style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
             ),
           ),
@@ -78,10 +79,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
               onReorderItem: (from, to) => _reorder(all, shown, from, to),
               itemBuilder: (context, i) {
                 final c = shown[i];
-                final note = [
-                  if (AppDatabase.isProtected(c)) 'Built-in',
-                  if (!_income && c.bucket != Bucket.everyday) 'Outside budget',
-                ];
+                final note = [if (AppDatabase.isProtected(c)) 'Built-in'];
                 return ListTile(
                   key: ValueKey(c.id),
                   leading: CategoryBadge(category: c, size: 40),
@@ -92,11 +90,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (!_income)
-                        Switch(
-                          value: c.bucket == Bucket.everyday,
-                          onChanged: (on) => ref
-                              .read(databaseProvider)
-                              .updateCategory(c.id, bucket: on ? Bucket.everyday : Bucket.outside),
+                        BucketMenu(
+                          value: c.bucket,
+                          onChanged: (b) => ref.read(databaseProvider).updateCategory(c.id, bucket: b),
                         ),
                       ReorderableDragStartListener(
                         index: i,

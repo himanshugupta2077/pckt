@@ -10,6 +10,7 @@ import '../../providers.dart';
 import '../../ui/widgets.dart';
 import 'category_picker.dart';
 import 'conversion_sheet.dart';
+import '../budgets/bucket_picker.dart';
 import '../budgets/in_budget.dart';
 import '../settings/manage_widgets.dart' show accountLabel;
 import 'edit_transaction_sheet.dart';
@@ -111,12 +112,22 @@ class TransactionSheet extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 6),
-        Center(
-          child: TextButton.icon(
-            onPressed: () => showEditTransactionSheet(context, view),
-            icon: const Icon(PhosphorIconsRegular.pencilSimple, size: 18),
-            label: const Text('Edit details'),
-          ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          children: [
+            TextButton.icon(
+              onPressed: () => showEditTransactionSheet(context, view),
+              icon: const Icon(PhosphorIconsRegular.pencilSimple, size: 18),
+              label: const Text('Edit details'),
+            ),
+            // One purchase into the fund: no payee rule, no other payment.
+            if (!credit && !t.isTransfer && t.bucket != Bucket.fund)
+              TextButton.icon(
+                onPressed: () => db.setTxnBucket(id, Bucket.fund),
+                icon: const Icon(PhosphorIconsFill.shoppingBag, size: 18),
+                label: const Text('Big & occasional'),
+              ),
+          ],
         ),
         if (t.isForeign && t.homeMinor == null) ...[
           const SizedBox(height: 18),
@@ -224,8 +235,8 @@ class TransactionSheet extends ConsumerWidget {
   }
 }
 
-/// "Counts toward budget" switch. With a merchant it answers for the payee
-/// (every payment to it) unless "Apply to all" is turned off.
+/// Bucket picker. With a merchant it answers for the payee (every payment
+/// to it) unless "Apply to all" is turned off.
 class _BudgetSection extends ConsumerStatefulWidget {
   const _BudgetSection({required this.view});
   final TxnView view;
@@ -246,23 +257,30 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
     final fixed = d.source == BudgetSource.transfer || d.source == BudgetSource.income;
     final merchant = t.merchant;
     final own = d.source == BudgetSource.manual || d.source == BudgetSource.payee;
+    if (fixed) {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+        leading: const Icon(PhosphorIconsRegular.target),
+        title: const Text('Bucket'),
+        subtitle: Text(budgetSourceLabel(v)),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile(
+        ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-          value: d.counts,
-          onChanged: fixed
-              ? null
-              : (on) {
-                  final b = on ? Bucket.everyday : Bucket.outside;
-                  merchant != null && _applyAll ? db.setPayeeBucket(merchant, b) : db.setTxnBucket(t.id, b);
-                },
-          title: const Text('Counts toward budget'),
-          subtitle: Text(budgetSourceLabel(v)),
-          secondary: const Icon(PhosphorIconsRegular.target),
+          leading: const Icon(PhosphorIconsRegular.target),
+          title: const Text('Bucket'),
+          subtitle: Text('${budgetSourceLabel(v)}. Only Everyday counts toward the budget.'),
         ),
-        if (!fixed && merchant != null)
+        BucketPicker(
+          value: d.bucket,
+          onChanged: (b) => merchant != null && _applyAll
+              ? db.setTxnBucket(t.id, null).then((_) => db.setPayeeBucket(merchant, b))
+              : db.setTxnBucket(t.id, b),
+        ),
+        if (merchant != null)
           CheckboxListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             controlAffinity: ListTileControlAffinity.leading,
@@ -271,7 +289,7 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
             onChanged: (on) => setState(() => _applyAll = on ?? true),
             title: Text('Apply to all $merchant'),
           ),
-        if (!fixed && own)
+        if (own)
           Padding(
             padding: const EdgeInsets.only(left: 4),
             child: TextButton(

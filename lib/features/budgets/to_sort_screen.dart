@@ -7,12 +7,13 @@ import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
+import 'bucket_picker.dart';
 import 'budget_providers.dart';
 import 'in_budget.dart';
 
-/// Payees (and payments without one) the app can't place in or out of the
-/// budget on its own. A yes/no for a payee becomes a rule for all of its
-/// payments, so each one is asked once.
+/// Payees (and payments without one) the app can't place in a bucket on
+/// its own. A bucket for a payee becomes a rule for all of its payments, so
+/// each one is asked once.
 class ToSortScreen extends ConsumerWidget {
   const ToSortScreen({super.key});
 
@@ -33,7 +34,7 @@ class ToSortScreen extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
                   child: Text(
-                    'Do these count toward your budget? Your answer applies to every payment to that payee.',
+                    'Which bucket? Your answer applies to every payment to that payee. Only Everyday counts toward the budget.',
                     style: context.text.bodyMedium?.copyWith(color: context.colors.onSurfaceVariant),
                   ),
                 ),
@@ -100,17 +101,7 @@ class _SortTile extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(onPressed: () => _answer(ref, Bucket.outside), child: const Text('Not budget')),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.tonal(onPressed: () => _answer(ref, Bucket.everyday), child: const Text('Budget')),
-              ),
-            ],
-          ),
+          BucketPicker(value: null, onChanged: (b) => _answer(ref, b)),
         ],
       ),
     );

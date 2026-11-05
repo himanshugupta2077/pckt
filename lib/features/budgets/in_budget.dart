@@ -30,7 +30,7 @@ BudgetDecision budgetDecision(TxnView v) {
 String bucketLabel(Bucket b) => switch (b) {
   Bucket.everyday => 'Everyday',
   Bucket.fixed => 'Fixed',
-  Bucket.fund => 'Big & occasional',
+  Bucket.fund => 'Fund',
   Bucket.outside => 'Outside',
 };
 
