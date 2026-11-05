@@ -17,12 +17,14 @@ import 'email_source_card.dart';
 import 'llm_status_card.dart';
 import 'sms_alerts_tile.dart';
 import 'security_card.dart';
+import 'server_backup.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final serverBackupOn = ref.watch(serverBackupProvider.select((s) => s.on));
     final themeMode = ref.watch(themeModeProvider);
     final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
 
@@ -110,10 +112,15 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   ListTile(
                     leading: const Icon(PhosphorIconsRegular.shieldCheck),
-                    title: const Text('Stored only on this phone'),
-                    subtitle: const Text('Messages are parsed on-device. Nothing is uploaded.'),
+                    title: Text(serverBackupOn ? 'Stored on this phone and your server' : 'Stored only on this phone'),
+                    subtitle: Text(
+                      serverBackupOn
+                          ? 'Messages are parsed on-device. Only the daily backup leaves, to your server.'
+                          : 'Messages are parsed on-device. Nothing is uploaded.',
+                    ),
                   ),
                   const DataExportTiles(),
+                  const ServerBackupTiles(),
                   ListTile(
                     leading: const Icon(PhosphorIconsRegular.trash, color: Palette.coral),
                     title: const Text('Reset imported data'),

@@ -11,6 +11,7 @@ import '../../providers.dart';
 import '../activity/add_transaction_sheet.dart';
 import 'share_outcome.dart';
 import '../budgets/budget_providers.dart';
+import '../settings/server_backup.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.shell});
@@ -36,7 +37,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   Future<void> _sync() => Future.wait([
-    ref.read(smsSyncProvider.notifier).sync().then(_announce),
+    ref.read(smsSyncProvider.notifier).sync().then((report) {
+      _announce(report);
+      // After the sync so the backup has today's messages; quiet if offline.
+      return ref.read(serverBackupProvider.notifier).backUpIfDue();
+    }),
     ref.read(emailSyncProvider.notifier).syncIfDue().then(_announce),
   ]);
 

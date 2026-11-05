@@ -207,8 +207,18 @@ Android 13+ also needs the notification permission, which Pckt asks for once.
   plaintext database and it retries on the next start. Every step logs with `[pckt-db]`. If the key is
   ever lost (keystore wiped) the unreadable file is kept aside as `pckt.sqlite.unreadable-<time>` and a
   new database is started.
-- **No backups.** Android cloud backup and device-to-device transfer are disabled — the data and the
-  key both stay on the phone (use the app's own export to move data).
+- **No Android backups.** Android cloud backup and device-to-device transfer are disabled; the key
+  never leaves the phone. Data leaves only through the app's own export and the optional server
+  backup below.
+- **Backup to your own server** (Settings → Data, off by default). Once a day, after the sync on
+  app open, Pckt uploads the same JSON as *Back up everything* with `PUT <address>/api/pckt/backup`
+  to an https address you enter (a Toolkit box on your Tailscale network; plain http is refused). No
+  address, host or token is in the code. The server stores the bytes as sent, keeps dated copies,
+  accepts only the owner's Tailscale login, and answers 409 to an upload with far fewer
+  transactions or rules than its newest copy, so a wiped phone can't replace a good backup until
+  you tap to confirm. Failures (offline, Tailscale off) only show in the Settings tile and retry an
+  hour later. To restore, download `<address>/api/pckt/backup/latest` and pick it in *Restore from
+  backup*.
 - **App lock** (Settings → Security, off by default): fingerprint / face / screen lock on a cold start
   and after more than 2 minutes in the background. Turning it on requires one successful unlock; if the
   phone's screen lock is later removed, the app lock switches itself off instead of locking you out.
