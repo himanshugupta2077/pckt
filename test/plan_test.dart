@@ -1,0 +1,92 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pckt/data/db/database.dart';
+import 'package:pckt/features/budgets/bucket_stats.dart';
+import 'package:pckt/features/plan/plan_math.dart';
+
+import 'budget_test.dart' show cat, txn;
+
+MonthlyPlan plan({
+  int salary = 14200000,
+  int emi = 4000000,
+  DateTime? emiEnds,
+  int investing = 1000000,
+  int fund = 1000000,
+  int? goal1,
+  DateTime? goal1Due,
+  int? goal2,
+  DateTime? goal2Due,
+}) => MonthlyPlan(
+  id: 1,
+  startMonth: DateTime(2026, 11),
+  salaryMinor: salary,
+  emiMinor: emi,
+  emiEnds: emiEnds,
+  investingMinor: investing,
+  fundMinor: fund,
+  goal1Minor: goal1,
+  goal1Due: goal1Due,
+  goal2Minor: goal2,
+  goal2Due: goal2Due,
+);
+
+void main() {
+  final nov = DateTime(2026, 11);
+
+  test('left over subtracts EMI, budget, averages, fund, investing and goals', () {
+    final o = PlanOutcome(
+      plan: plan(emiEnds: DateTime(2027, 2), goal1: 30000000, goal1Due: DateTime(2027, 11)),
+      month: nov,
+      everyday: 1500000,
+      fixedAvg: const MonthAverage(1300000, 2),
+      familyAvg: const MonthAverage(500000, 2),
+    );
+    expect(o.goals.single.perMonth, 2500000); // ₹3L over 12 months
+    expect(o.leftOver, 14200000 - 4000000 - 1500000 - 1300000 - 500000 - 1000000 - 1000000 - 2500000);
+    expect(o.emiFreedFrom, DateTime(2027, 3));
+  });
+
+  test('a goal due this month or earlier is "due now", not divided', () {
+    final o = PlanOutcome(
+      plan: plan(goal1: 5000000, goal1Due: nov, goal2: 600000, goal2Due: DateTime(2026, 9)),
+      month: nov,
+      everyday: null,
+      fixedAvg: const MonthAverage(0, 0),
+      familyAvg: const MonthAverage(0, 0),
+    );
+    expect([for (final g in o.goals) (g.index, g.perMonth)], [(1, null), (2, null)]);
+    expect(o.goalsPerMonth, 0);
+    expect(o.leftOver, 14200000 - 4000000 - 1000000 - 1000000);
+  });
+
+  test('the EMI stops counting after the month it ends', () {
+    PlanOutcome at(DateTime m) => PlanOutcome(
+      plan: plan(emiEnds: DateTime(2027, 2)),
+      month: m,
+      everyday: 0,
+      fixedAvg: const MonthAverage(0, 0),
+      familyAvg: const MonthAverage(0, 0),
+    );
+    expect(at(DateTime(2027, 2)).emi, 4000000);
+    expect(at(DateTime(2027, 3)).emi, 0);
+    expect(at(DateTime(2027, 3)).emiFreedFrom, isNull);
+  });
+
+  test('averages come from complete months only, Family and Insurance from Outside', () {
+    final bills = cat(1, 'Bills', bucket: Bucket.fixed);
+    final family = cat(2, 'Family', bucket: Bucket.outside, seed: 'Family');
+    final insurance = cat(3, 'Insurance', bucket: Bucket.outside, seed: 'Insurance');
+    final txns = [
+      txn(600000, at: DateTime(2026, 9, 4), category: bills),
+      txn(800000, at: DateTime(2026, 10, 4), category: bills),
+      txn(2000000, at: DateTime(2026, 10, 8), category: family),
+      txn(400000, at: DateTime(2026, 9, 8), category: insurance),
+      txn(999999, at: DateTime(2026, 10, 9), category: family, bucket: Bucket.everyday), // counted in Everyday
+      txn(730000, at: DateTime(2026, 8, 30), category: bills), // before the data is complete
+    ];
+    final two = completeMonths(nov, DateTime(2026, 9, 1));
+    expect(monthlyAverage(txns, two, isFixed).minor, 700000);
+    expect(monthlyAverage(txns, two, isFamilyOrInsurance).minor, 1200000);
+    final one = completeMonths(nov, DateTime(2026, 9, 10));
+    expect((monthlyAverage(txns, one, isFixed).minor, monthlyAverage(txns, one, isFixed).months), (800000, 1));
+  });
+}

@@ -12,6 +12,7 @@ import 'features/dashboard/dashboard_screen.dart';
 import 'features/insights/insights_screen.dart';
 import 'features/lock/app_lock_gate.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/plan/plan_screen.dart';
 import 'data/db/tables.dart';
 import 'features/recurring/recurring_screen.dart';
 import 'features/settings/accounts_screen.dart';
@@ -44,6 +45,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/llm', builder: (_, _) => const LlmSettingsScreen()),
       GoRoute(path: '/budgets', builder: (_, _) => const BudgetsScreen()),
       GoRoute(path: '/to-sort', builder: (_, _) => const ToSortScreen()),
+      GoRoute(path: '/plan', builder: (_, _) => const PlanScreen()),
       GoRoute(path: '/recurring', builder: (_, _) => const RecurringScreen()),
       GoRoute(path: '/settings/accounts', builder: (_, _) => const AccountsScreen()),
       GoRoute(path: '/settings/categories', builder: (_, _) => const CategoriesScreen()),
