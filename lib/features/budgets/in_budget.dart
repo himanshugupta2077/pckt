@@ -19,7 +19,7 @@ class BudgetDecision {
 /// payment, the payee's, the category's; anything else is Everyday.
 BudgetDecision budgetDecision(TxnView v) {
   final t = v.txn;
-  if (t.isTransfer) return const BudgetDecision(null, BudgetSource.transfer);
+  if (isTransferLike(v)) return const BudgetDecision(null, BudgetSource.transfer);
   if (t.direction == TxnDirection.credit) return const BudgetDecision(null, BudgetSource.income);
   if (t.bucket case final b?) return BudgetDecision(b, BudgetSource.manual);
   if (v.rule?.bucket case final b?) return BudgetDecision(b, BudgetSource.payee);
@@ -36,13 +36,17 @@ String bucketLabel(Bucket b) => switch (b) {
   Bucket.fixed => 'Fixed',
   Bucket.fund => 'Fund',
   Bucket.outside => 'Outside',
-  Bucket.ignore => 'Ignore',
+  Bucket.lending => 'Lending',
 };
 
-/// Neither spending nor income (money lent or borrowed and paid back, cash
-/// moved into the bank), in either direction. Decided like a bucket (the
-/// payment's own choice, then the payee's, then the category's).
-bool isIgnored(TxnView v) => (v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket) == Bucket.ignore;
+/// Money lent or borrowed and paid back, to or from: neither spending nor
+/// income. Decided like a bucket (the payment's own choice, then the
+/// payee's, then the category's).
+bool isLending(TxnView v) => (v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket) == Bucket.lending;
+
+/// Money moved between the user's own accounts or cards (a card bill): the
+/// transfer flag, or the Transfers category, which means the same.
+bool isTransferLike(TxnView v) => v.txn.isTransfer || (v.category?.seedName ?? v.category?.name) == 'Transfers';
 
 /// Short line for the transaction sheet.
 String budgetSourceLabel(TxnView v) {

@@ -10,8 +10,9 @@ import '../budgets/bucket_picker.dart';
 import '../budgets/in_budget.dart';
 
 /// The month's money in, each with a tick for whether it is income.
-/// Unticking marks the payment Ignore (with a note why); a transfer between
-/// own accounts shows unticked.
+/// Unticking asks what it was instead: lending (with a note) or a transfer
+/// between own accounts. Transfers and card bills aren't listed: they are
+/// never income.
 Future<void> showIncomeSheet(BuildContext context) => showModalBottomSheet(
   context: context,
   isScrollControlled: true,
@@ -24,7 +25,7 @@ Future<void> showIncomeSheet(BuildContext context) => showModalBottomSheet(
   ),
 );
 
-bool _counts(TxnView v) => !v.txn.isTransfer && !isIgnored(v);
+bool _counts(TxnView v) => !isLending(v);
 
 class _IncomeList extends ConsumerWidget {
   const _IncomeList({required this.scroll});
@@ -34,15 +35,32 @@ class _IncomeList extends ConsumerWidget {
     final db = ref.read(databaseProvider);
     final t = v.txn;
     if (counts) {
-      if (t.isTransfer) await db.setTransfer(t.id, false);
-      // Ignored by its payee or category: this one payment says otherwise.
-      final byRule = (v.rule?.bucket ?? v.category?.bucket) == Bucket.ignore;
+      // Lending by its payee or category: this one payment says otherwise.
+      final byRule = (v.rule?.bucket ?? v.category?.bucket) == Bucket.lending;
       await db.setTxnBucket(t.id, byRule ? Bucket.everyday : null);
       return;
     }
-    await db.setTxnBucket(t.id, Bucket.ignore);
+    final kind = await showDialog<String>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Not income, so it is'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(c, 'lending'),
+            child: const Text('Lending: lent or borrowed, and paid back'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(c, 'transfer'),
+            child: const Text('Transfer: my own money, from another account or cash'),
+          ),
+        ],
+      ),
+    );
+    if (kind == 'transfer') return db.setTransfer(t.id, true);
+    if (kind != 'lending') return;
+    await db.setTxnBucket(t.id, Bucket.lending);
     if (!context.mounted) return;
-    final note = await askWhyIgnored(context, t.note);
+    final note = await askLendingNote(context, t.note);
     if (note != null) await db.setNote(t.id, note.isEmpty ? null : note);
   }
 
@@ -50,7 +68,7 @@ class _IncomeList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final credits = [
       for (final v in ref.watch(monthTxnsProvider).value ?? const <TxnView>[])
-        if (v.txn.direction == TxnDirection.credit) v,
+        if (v.txn.direction == TxnDirection.credit && !isTransferLike(v)) v,
     ];
     final counted = credits.where(_counts).fold(0, (s, v) => s + (v.txn.homeMinor ?? 0));
     return ListView(
@@ -67,7 +85,7 @@ class _IncomeList extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: Text(
-            'Untick money that isn\'t income: cash you deposited, a loan from family, your own accounts.',
+            'Untick money that isn\'t income: money lent to you or paid back, your own money moved in.',
             style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
           ),
         ),

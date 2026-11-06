@@ -326,8 +326,8 @@ const defaultCategories = <CategorySeed>[
   CategorySeed('People', 'people', -1),
   CategorySeed('Family', 'family', 6, bucket: Bucket.outside),
   CategorySeed('Cash Withdrawal', 'cash', 5, keywords: ['atm', 'cash withdrawal']),
-  // Money between your own accounts: neither spending nor income.
-  CategorySeed('Transfers', 'transfer', -1, bucket: Bucket.ignore),
+  // Money between your own accounts: a transfer, so never in a bucket.
+  CategorySeed('Transfers', 'transfer', -1, bucket: Bucket.outside),
   CategorySeed('Other', 'other', -1),
   // Income
   CategorySeed('Salary', 'salary', 2, isIncome: true, keywords: ['salary', 'payroll', 'sal cr']),

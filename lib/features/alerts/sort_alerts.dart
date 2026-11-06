@@ -27,7 +27,8 @@ class AlertQuestion {
   final String title;
   final String text;
 
-  /// Money in gets Income / Ignore buttons, money out Everyday / Fixed / Ignore.
+  /// Money in gets Income / Lending / Transfer buttons, money out Everyday /
+  /// Fixed / Lending.
   final bool credit;
 }
 
@@ -40,7 +41,7 @@ AlertQuestion? questionFor(TxnView v) {
   return credit
       ? AlertQuestion(
           who == null ? '$amount received' : '$amount from $who',
-          'Income, or money to ignore? Tap for details.',
+          'Income, lending or your own transfer? Tap for details.',
           credit: true,
         )
       : AlertQuestion(
@@ -50,7 +51,8 @@ AlertQuestion? questionFor(TxnView v) {
         );
 }
 
-/// A button tapped on a question: [choice] is a [Bucket] name or "income".
+/// A button tapped on a question: [choice] is a [Bucket] name, "income" or
+/// "transfer".
 class AlertAnswer {
   const AlertAnswer({required this.txnId, required this.rawId, required this.choice});
 
@@ -68,21 +70,27 @@ class AlertAnswer {
 }
 
 /// Applies answers like the transaction sheet does, with one difference:
-/// Ignore (money lent or paid back) is for this payment only. Everyday and
+/// Lending (money lent or paid back) is for this payment only. Everyday and
 /// Fixed answer for the payee when there is one, so it isn't asked again.
-/// "income" changes nothing: money in already counts as income.
+/// "transfer" marks money between own accounts. "income" changes nothing:
+/// money in already counts as income.
 Future<void> applyAlertAnswers(AppDatabase db, Iterable<AlertAnswer> answers) async {
   for (final a in answers) {
     final bucket = Bucket.values.asNameMap()[a.choice];
-    if (bucket == null) continue;
+    final transfer = a.choice == 'transfer';
+    if (bucket == null && !transfer) continue;
     var v = await db.watchTxn(a.txnId).first;
     if (v == null) {
       final raw = await (db.select(db.rawMessages)..where((m) => m.id.equals(a.rawId))).getSingleOrNull();
       if (raw?.transactionId case final id?) v = await db.watchTxn(id).first;
     }
     if (v == null) continue;
+    if (transfer) {
+      await db.setTransfer(v.txn.id, true);
+      continue;
+    }
     final merchant = v.txn.merchant;
-    if (bucket == Bucket.ignore || merchant == null) {
+    if (bucket == Bucket.lending || merchant == null) {
       await db.setTxnBucket(v.txn.id, bucket);
     } else {
       await db.setTxnBucket(v.txn.id, null);

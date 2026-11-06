@@ -25,7 +25,9 @@ void main() {
   Future<TxnView> view(int id) async => (await db.watchTxn(id).first)!;
 
   Future<TxnView> ingested() async {
-    await svc.ingest([RawInput(source: SourceKind.sms, externalId: '1', sender: 'BZ-SBIUPI', body: upi, receivedAt: at)]);
+    await svc.ingest([
+      RawInput(source: SourceKind.sms, externalId: '1', sender: 'BZ-SBIUPI', body: upi, receivedAt: at),
+    ]);
     // The SMS app may lay out the parts with different whitespace.
     final raw = await findSms(db, upi.replaceAll('. ', '.  '), at);
     return view(raw!.transactionId!);
@@ -54,13 +56,13 @@ void main() {
     expect(questionFor(await view(id)), isNull);
   });
 
-  test('money in from a person asks income or ignore', () async {
+  test('money in from a person asks income, lending or transfer', () async {
     final id = await db.addManual(amountMinor: 500000, direction: TxnDirection.credit, at: at, merchant: 'Ramesh K');
     final q = questionFor(await view(id))!;
     expect((q.title, q.credit), ('₹5,000 from Ramesh K', true));
   });
 
-  test('Everyday answers for the payee, Ignore for one payment, and survives it', () async {
+  test('Everyday answers for the payee, Lending for one payment, and survives it', () async {
     final first = await ingested();
     final second = await db.addManual(
       amountMinor: 30000,
@@ -68,13 +70,13 @@ void main() {
       at: at.add(const Duration(days: 1)),
       merchant: first.txn.merchant,
     );
-    await applyAlertAnswers(db, [AlertAnswer(txnId: first.txn.id, rawId: 0, choice: 'ignore')]);
-    expect(budgetDecision(await view(first.txn.id)).bucket, Bucket.ignore);
-    expect(questionFor(await view(second)), isNotNull, reason: 'Ignore is not a payee answer');
+    await applyAlertAnswers(db, [AlertAnswer(txnId: first.txn.id, rawId: 0, choice: 'lending')]);
+    expect(budgetDecision(await view(first.txn.id)).bucket, Bucket.lending);
+    expect(questionFor(await view(second)), isNotNull, reason: 'Lending is not a payee answer');
 
     await applyAlertAnswers(db, [AlertAnswer(txnId: second, rawId: 0, choice: 'everyday')]);
     expect(budgetDecision(await view(second)).source, BudgetSource.payee);
-    expect(budgetDecision(await view(first.txn.id)).bucket, Bucket.ignore, reason: 'the loan stays ignored');
+    expect(budgetDecision(await view(first.txn.id)).bucket, Bucket.lending, reason: 'the loan stays Lending');
   });
 
   test('an answer finds the payment through its SMS when the id is gone', () async {
@@ -91,5 +93,11 @@ void main() {
       AlertAnswer(txnId: v.txn.id, rawId: 0, choice: 'nonsense'),
     ]);
     expect(questionFor(await view(v.txn.id)), isNotNull);
+  });
+
+  test('Transfer on money in marks it a transfer', () async {
+    final id = await db.addManual(amountMinor: 150000, direction: TxnDirection.credit, at: DateTime(2026, 11, 1));
+    await applyAlertAnswers(db, [AlertAnswer(txnId: id, rawId: 0, choice: 'transfer')]);
+    expect((await db.watchTxn(id).first)!.txn.isTransfer, isTrue);
   });
 }

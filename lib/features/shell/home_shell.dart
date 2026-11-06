@@ -55,6 +55,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       await _openFromAlert();
       await _repairOnce();
       await _mergeCardBillsOnce();
+      await _transfersOutOfLendingOnce();
       await ref.read(smsAlertsProvider.notifier).ensurePermission();
     });
   }
@@ -80,7 +81,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final log = await ref.read(ingestionProvider).repairSince(db.shownFrom ?? DateTime(2026, 10));
     await db.setBudget(amountMinor: bucketBudgetMinor);
     for (final c in await db.allCategories()) {
-      if ((c.seedName ?? c.name) == 'Family') await db.updateCategory(c.id, bucket: Bucket.ignore);
+      if ((c.seedName ?? c.name) == 'Family') await db.updateCategory(c.id, bucket: Bucket.lending);
     }
     await prefs.setBool(PrefKeys.repairedOct2026, true);
     debugPrint('Repair:\n${log.join('\n')}');
@@ -88,16 +89,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   /// Once, after card bills became one transfer: a fresh server backup
   /// first, then each bill's messages since the data start joined into one,
-  /// and own-account transfers moved to Ignore (not spending, not income).
+  /// (Transfers counts as a transfer by itself now, so its bucket is left
+  /// alone: see [_transfersOutOfLendingOnce].)
   Future<void> _mergeCardBillsOnce() async {
     final prefs = ref.read(prefsProvider);
     if (prefs.getBool(PrefKeys.mergedCardBills) ?? false) return;
     if (!await ref.read(serverBackupProvider.notifier).backUpNow()) return;
     final db = ref.read(databaseProvider);
     final log = await ref.read(ingestionProvider).mergeCardBills(db.shownFrom ?? DateTime(2026, 10));
-    for (final c in await db.allCategories()) {
-      if ((c.seedName ?? c.name) == 'Transfers') await db.updateCategory(c.id, bucket: Bucket.ignore);
-    }
     await prefs.setBool(PrefKeys.mergedCardBills, true);
     debugPrint('Card bills:\n${log.join('\n')}');
   }
@@ -124,6 +123,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       return;
     }
     if (id != null && mounted) await showTransactionSheet(context, id);
+  }
+
+  /// Once: an earlier build put the Transfers category in Lending. A
+  /// transfer is its own type now, so the category goes back to its default.
+  Future<void> _transfersOutOfLendingOnce() async {
+    final prefs = ref.read(prefsProvider);
+    if (prefs.getBool(PrefKeys.transfersOutOfLending) ?? false) return;
+    final db = ref.read(databaseProvider);
+    for (final c in await db.allCategories()) {
+      if ((c.seedName ?? c.name) == 'Transfers') await db.updateCategory(c.id, bucket: Bucket.outside);
+    }
+    await prefs.setBool(PrefKeys.transfersOutOfLending, true);
   }
 
   void _announce(IngestReport? report) {

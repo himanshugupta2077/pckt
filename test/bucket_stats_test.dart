@@ -48,8 +48,8 @@ void main() {
       txn(1500000, at: DateTime(2026, 12, 7), category: family),
       txn(50000, at: DateTime(2026, 12, 7), category: food),
       txn(9999900, at: DateTime(2026, 12, 7), transfer: true),
-      txn(6400000, at: DateTime(2026, 12, 4), category: family, bucket: Bucket.ignore), // paying back
-      txn(2000000, at: DateTime(2026, 12, 1), dir: TxnDirection.credit, category: family, bucket: Bucket.ignore),
+      txn(6400000, at: DateTime(2026, 12, 4), category: family, bucket: Bucket.lending), // paying back
+      txn(2000000, at: DateTime(2026, 12, 1), dir: TxnDirection.credit, category: family, bucket: Bucket.lending),
     ];
     final s = BucketSummary(txns: txns, month: DateTime(2026, 12));
     expect(s.fixed, 80000);
@@ -65,10 +65,10 @@ void main() {
     expect((stats.income, stats.outside), (0, 6880000)); // the ignored ones are neither
   });
 
-  test('a payee or category marked Ignore takes its payments out of spending and income', () {
-    final family = cat(9, 'Family', bucket: Bucket.ignore, seed: 'Family');
-    expect(isIgnored(txn(500000, category: family)), isTrue);
-    expect(isIgnored(txn(500000, category: family, bucket: Bucket.outside)), isFalse); // a real gift, this once
-    expect(isIgnored(txn(500000, merchant: 'Ravi', payee: Bucket.ignore)), isTrue);
+  test('a payee or category marked Lending takes its payments out of spending and income', () {
+    final family = cat(9, 'Family', bucket: Bucket.lending, seed: 'Family');
+    expect(isLending(txn(500000, category: family)), isTrue);
+    expect(isLending(txn(500000, category: family, bucket: Bucket.outside)), isFalse); // a real gift, this once
+    expect(isLending(txn(500000, merchant: 'Ravi', payee: Bucket.lending)), isTrue);
   });
 }

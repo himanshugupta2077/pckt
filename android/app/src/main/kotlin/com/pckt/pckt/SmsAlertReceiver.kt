@@ -225,8 +225,8 @@ class SmsAlertReceiver : BroadcastReceiver() {
                         context, id, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                     )
                 )
-            val choices = if (credit) listOf("income" to "Income", "ignore" to "Ignore")
-            else listOf("everyday" to "Everyday", "fixed" to "Fixed", "ignore" to "Ignore")
+            val choices = if (credit) listOf("income" to "Income", "lending" to "Lending", "transfer" to "Transfer")
+            else listOf("everyday" to "Everyday", "fixed" to "Fixed", "lending" to "Lending")
             choices.forEachIndexed { i, (choice, label) ->
                 val answer = Intent(context, SortActionReceiver::class.java).apply {
                     action = "com.pckt.pckt.SORT.$choice"

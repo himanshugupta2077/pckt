@@ -35,6 +35,10 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
   late final _merchant = TextEditingController(text: _t.merchant ?? '');
   late final _note = TextEditingController(text: _t.note ?? '');
   late var _direction = _t.direction;
+
+  /// Money between own accounts or cards: neither expense nor income. The
+  /// direction stays what the message said (which side the money left).
+  late var _transfer = _t.isTransfer;
   late var _at = _t.occurredAt;
   late int? _accountId = _t.accountId;
   var _saving = false;
@@ -75,7 +79,14 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
 
     // A credit can't keep an expense category (and vice versa); Transfers fits both.
     final cat = widget.view.category;
-    final kindMismatch = cat != null && cat.name != 'Transfers' && cat.isIncome != (_direction == TxnDirection.credit);
+    final wasTransfers = cat != null && (cat.seedName ?? cat.name) == 'Transfers';
+    final kindMismatch = cat != null && !wasTransfers && cat.isIncome != (_direction == TxnDirection.credit);
+    final transfers = (await db.allCategories()).where((c) => (c.seedName ?? c.name) == 'Transfers').firstOrNull;
+    final categoryId = _transfer
+        ? Value(transfers?.id)
+        : kindMismatch || wasTransfers
+        ? const Value<int?>(null)
+        : const Value<int?>.absent();
 
     var renameAll = false;
     if (oldMerchant != null && newMerchant != null && newMerchant != oldMerchant) {
@@ -116,8 +127,9 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
         merchant: newMerchant,
         accountId: _accountId,
         note: note,
-        categoryId: kindMismatch ? const Value(null) : const Value.absent(),
+        categoryId: categoryId,
       );
+      if (_transfer != _t.isTransfer) await db.setTransfer(_t.id, _transfer);
     });
     if (mounted) Navigator.pop(context);
   }
@@ -137,22 +149,37 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
           children: [
             Text('Edit transaction', style: context.text.titleLarge),
             const SizedBox(height: 14),
-            SegmentedButton<TxnDirection>(
+            SegmentedButton<String>(
               segments: const [
+                ButtonSegment(value: 'expense', label: Text('Expense'), icon: Icon(PhosphorIconsBold.arrowUpRight)),
+                ButtonSegment(value: 'income', label: Text('Income'), icon: Icon(PhosphorIconsBold.arrowDownLeft)),
                 ButtonSegment(
-                  value: TxnDirection.debit,
-                  label: Text('Expense'),
-                  icon: Icon(PhosphorIconsBold.arrowUpRight),
-                ),
-                ButtonSegment(
-                  value: TxnDirection.credit,
-                  label: Text('Income'),
-                  icon: Icon(PhosphorIconsBold.arrowDownLeft),
+                  value: 'transfer',
+                  label: Text('Transfer'),
+                  icon: Icon(PhosphorIconsRegular.arrowsLeftRight),
                 ),
               ],
-              selected: {_direction},
-              onSelectionChanged: (s) => setState(() => _direction = s.first),
+              selected: {
+                _transfer
+                    ? 'transfer'
+                    : _direction == TxnDirection.credit
+                    ? 'income'
+                    : 'expense',
+              },
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => setState(() {
+                _transfer = s.first == 'transfer';
+                if (!_transfer) _direction = s.first == 'income' ? TxnDirection.credit : TxnDirection.debit;
+              }),
             ),
+            if (_transfer)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Between your own accounts or cards, like a card bill: not spending, not income.',
+                  style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
+                ),
+              ),
             const SizedBox(height: 8),
             AmountField(
               controller: _amount,

@@ -509,8 +509,9 @@ class AppDatabase extends _$AppDatabase {
       MerchantRulesCompanion.insert(pattern: pattern, bucket: Value(bucket)),
       onConflict: DoUpdate((_) => MerchantRulesCompanion(bucket: Value(bucket)), target: [merchantRules.pattern]),
     );
-    await (update(transactions)
-          ..where((t) => t.merchant.lower().equals(pattern) & t.bucket.isNotInValues(const [Bucket.fund, Bucket.ignore])))
+    await (update(transactions)..where(
+          (t) => t.merchant.lower().equals(pattern) & t.bucket.isNotInValues(const [Bucket.fund, Bucket.lending]),
+        ))
         .write(const TransactionsCompanion(bucket: Value(null)));
   });
 

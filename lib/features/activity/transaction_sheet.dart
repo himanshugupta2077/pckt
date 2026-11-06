@@ -281,8 +281,8 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
             await (merchant != null && _applyAll
                 ? db.setTxnBucket(t.id, null).then((_) => db.setPayeeBucket(merchant, b))
                 : db.setTxnBucket(t.id, b));
-            if (b != Bucket.ignore || !context.mounted) return;
-            final note = await askWhyIgnored(context, t.note);
+            if (b != Bucket.lending || !context.mounted) return;
+            final note = await askLendingNote(context, t.note);
             if (note != null) await db.setNote(t.id, note.isEmpty ? null : note);
           },
         ),

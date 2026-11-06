@@ -18,7 +18,7 @@ class MonthStats {
     final byCat = <int?, CategoryTotal>{};
     for (final v in txns) {
       final t = v.txn;
-      if (t.isTransfer || isIgnored(v)) continue;
+      if (isTransferLike(v) || isLending(v)) continue;
       final amount = t.homeMinor;
       if (amount == null) {
         unconverted++;

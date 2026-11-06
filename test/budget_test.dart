@@ -150,8 +150,7 @@ void main() {
       };
       expect(inBucket(Bucket.fixed), {'Bills & Utilities', 'Mobile & Internet', 'Subscriptions', 'Fitness'});
       expect(inBucket(Bucket.fund), {'Big & occasional'});
-      expect(inBucket(Bucket.outside), {'Investments', 'Insurance', 'Loans & EMI', 'Family'});
-      expect(inBucket(Bucket.ignore), {'Transfers'});
+      expect(inBucket(Bucket.outside), {'Investments', 'Insurance', 'Loans & EMI', 'Transfers', 'Family'});
       expect(cats.where((c) => c.name == 'Gym & supplements'), isEmpty);
       expect(await db.watchPlan().first, isNotNull, reason: 'a new install has its plan row');
     });
@@ -289,9 +288,23 @@ void main() {
       expect(await again.watchEmis().first, hasLength(1));
     });
 
-    test('ticking a credit as income overrides an Ignore from its payee or category', () async {
+    test('a payment in the Transfers category is a transfer: never income or spending', () async {
+      final transfers = (await db.allCategories()).firstWhere((c) => c.name == 'Transfers');
+      final id = await db.addManual(
+        amountMinor: 3900000,
+        direction: TxnDirection.credit,
+        at: DateTime(2026, 11, 5),
+        categoryId: transfers.id,
+      );
+      final v = (await db.watchTxn(id).first)!;
+      expect(isTransferLike(v), isTrue);
+      expect(budgetDecision(v).source, BudgetSource.transfer);
+      expect(MonthStats([v], DateTime(2026, 11)).income, 0);
+    });
+
+    test('ticking a credit as income overrides Lending from its payee or category', () async {
       final family = (await db.allCategories()).firstWhere((c) => c.name == 'Family');
-      await db.updateCategory(family.id, bucket: Bucket.ignore);
+      await db.updateCategory(family.id, bucket: Bucket.lending);
       final id = await db.addManual(
         amountMinor: 1800000,
         direction: TxnDirection.credit,
@@ -299,9 +312,9 @@ void main() {
         categoryId: family.id,
       );
       Future<TxnView> view() async => (await db.watchTxn(id).first)!;
-      expect(isIgnored(await view()), isTrue);
+      expect(isLending(await view()), isTrue);
       await db.setTxnBucket(id, Bucket.everyday); // what the income tick writes
-      expect(isIgnored(await view()), isFalse);
+      expect(isLending(await view()), isFalse);
       expect(MonthStats([await view()], DateTime(2026, 11)).income, 1800000);
     });
 
