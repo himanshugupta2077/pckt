@@ -1,8 +1,10 @@
+import 'dart:math' as math;
+
 import '../../data/db/database.dart';
 import '../budgets/in_budget.dart';
 
-/// Why a payment is a need, a want, invested, lent, or still unsorted.
-enum SpendSource { transfer, income, lending, invest, manual, payee, category, unsorted }
+/// Why a payment is a need, a want, invested or lent.
+enum SpendSource { transfer, income, lending, invest, manual, payee, category, fallback }
 
 class SpendDecision {
   const SpendDecision(this.kind, this.source);
@@ -12,27 +14,11 @@ class SpendDecision {
   final SpendSource source;
 }
 
-/// Needs. Family is lending, and EMI comes from the plan list, so neither
-/// seed is here.
-const needSeeds = {
-  'Groceries',
-  'Transport',
-  'Fuel',
-  'Bills & Utilities',
-  'Mobile & Internet',
-  'Rent & Home',
-  'Health',
-  'Education',
-  'Insurance',
-};
-
-/// Not a need or a want until someone says. Other is most of an unsorted month.
-const _unsortedSeeds = {'Other', 'People', 'Cash Withdrawal', 'Loans & EMI'};
-
 /// First match wins. Investment and lending apply in both directions, and
 /// they win over a need/want left on the same payment so it is not counted
 /// twice. An Investments payment counts as invested even when its bucket is
-/// still Outside.
+/// still Outside. Every other spend is a need or a want: the payment's own
+/// answer, the payee's, the category's, else want.
 SpendDecision spendDecision(TxnView v) {
   final t = v.txn;
   if (isTransferLike(v)) return const SpendDecision(null, SpendSource.transfer);
@@ -41,10 +27,20 @@ SpendDecision spendDecision(TxnView v) {
   if (t.direction == TxnDirection.credit) return const SpendDecision(null, SpendSource.income);
   if (t.spendKind case final k?) return SpendDecision(k, SpendSource.manual);
   if (v.rule?.spendKind case final k?) return SpendDecision(k, SpendSource.payee);
-  final seed = v.category?.seedName ?? v.category?.name;
-  if (v.category == null || _unsortedSeeds.contains(seed)) return const SpendDecision(null, SpendSource.unsorted);
-  if (needSeeds.contains(seed)) return const SpendDecision(SpendKind.need, SpendSource.category);
-  return const SpendDecision(SpendKind.want, SpendSource.category);
+  if (v.category case final c?) return SpendDecision(c.spendKind, SpendSource.category);
+  return const SpendDecision(SpendKind.want, SpendSource.fallback);
+}
+
+/// A category whose spends are never a need or a want, so it has no
+/// choice to make in Settings.
+bool categoryHasSpendKind(Category c) {
+  final seed = c.seedName ?? c.name;
+  return !c.isIncome &&
+      seed != 'Transfers' &&
+      seed != 'Investments' &&
+      seed != 'Family' &&
+      c.bucket != Bucket.invest &&
+      c.bucket != Bucket.lending;
 }
 
 bool _invested(TxnView v) => isInvest(v) || (v.category?.seedName ?? v.category?.name) == 'Investments';
@@ -52,10 +48,7 @@ bool _invested(TxnView v) => isInvest(v) || (v.category?.seedName ?? v.category?
 bool _lent(TxnView v) => isLending(v) || (v.category?.seedName ?? v.category?.name) == 'Family';
 
 /// The need/want control applies. Invested, lent, transfers and income do not.
-bool canSetSpendKind(TxnView v) {
-  final s = spendDecision(v).source;
-  return s == SpendSource.manual || s == SpendSource.payee || s == SpendSource.category || s == SpendSource.unsorted;
-}
+bool canSetSpendKind(TxnView v) => spendDecision(v).kind != null;
 
 /// Whole percent of [whole], half up. 0 when [whole] is not positive.
 int percentOf(int part, int whole) {
@@ -65,18 +58,16 @@ int percentOf(int part, int whole) {
   return neg ? -q : q;
 }
 
-String percentLabel(int part, int whole) {
-  if (whole <= 0) return '';
-  final n = percentOf(part, whole);
-  return '${n.isNegative ? '−' : ''}${n.abs()}%';
-}
+String percentLabel(int n) => '${n.isNegative ? '−' : ''}${n.abs()}%';
 
 /// This month's salary split. [txns] are already the month.
 ///
 /// [emiMinor] is the plan's active instalments. A card EMI is not its own
-/// transaction, so it is added to needs and is not also taken from a
-/// Loans & EMI category. Unsorted and lent are reported beside the three
-/// shares. They are not called unspent.
+/// transaction, so it is added to needs, less any Loans & EMI payment
+/// already counted there, so a bank-debited EMI is not counted twice.
+/// Savings is what the salary has
+/// left after invested, needs and wants. Lending is not part of it: money
+/// lent comes back.
 class SalarySplit {
   SalarySplit({required List<TxnView> txns, required this.salaryMinor, this.emiMinor = 0}) {
     for (final v in txns) {
@@ -88,21 +79,14 @@ class SalarySplit {
         case SpendSource.invest:
           invested += credit ? -amount : amount;
           investTxns.add(v);
-        case SpendSource.lending:
-          if (!credit) {
-            lent += amount;
-            lentTxns.add(v);
-          }
-        case SpendSource.unsorted:
-          unsorted += amount;
-          unsortedTxns.add(v);
-        case SpendSource.transfer || SpendSource.income:
+        case SpendSource.transfer || SpendSource.income || SpendSource.lending:
           break;
-        case SpendSource.manual || SpendSource.payee || SpendSource.category:
+        case SpendSource.manual || SpendSource.payee || SpendSource.category || SpendSource.fallback:
           switch (d.kind) {
             case SpendKind.need:
               needs += amount;
               needTxns.add(v);
+              if ((v.category?.seedName ?? v.category?.name) == 'Loans & EMI') emiPaid += amount;
             case SpendKind.want:
               wants += amount;
               wantTxns.add(v);
@@ -111,24 +95,35 @@ class SalarySplit {
           }
       }
     }
-    needs += emiMinor;
+    needs += math.max(0, emiMinor - emiPaid);
   }
 
   final int salaryMinor;
 
-  /// Plan EMIs included in [needs].
+  /// Plan EMIs, included in [needs] less [emiPaid].
   final int emiMinor;
+
+  /// Loans & EMI payments this month, counted as needs.
+  int emiPaid = 0;
 
   int invested = 0;
   int needs = 0;
   int wants = 0;
-  int unsorted = 0;
-  int lent = 0;
   final investTxns = <TxnView>[];
   final needTxns = <TxnView>[];
   final wantTxns = <TxnView>[];
-  final unsortedTxns = <TxnView>[];
-  final lentTxns = <TxnView>[];
+
+  /// Salary left after the other three. Negative when they are more.
+  int get savings => salaryMinor - invested - needs - wants;
+
+  /// Whole percents of salary for invested, needs, wants and savings.
+  /// Savings is 100 minus the other three, so the four add up to 100.
+  (int, int, int, int) get percents {
+    final i = percentOf(invested, salaryMinor);
+    final n = percentOf(needs, salaryMinor);
+    final w = percentOf(wants, salaryMinor);
+    return (i, n, w, salaryMinor > 0 ? 100 - i - n - w : 0);
+  }
 }
 
 String spendSourceLabel(TxnView v) {
@@ -142,6 +137,6 @@ String spendSourceLabel(TxnView v) {
     SpendSource.manual => '$name, set for this payment',
     SpendSource.payee => '$name, from the payee',
     SpendSource.category => '$name, from ${v.category!.name}',
-    SpendSource.unsorted => 'Not sorted yet',
+    SpendSource.fallback => 'Want, no category',
   };
 }

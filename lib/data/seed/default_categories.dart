@@ -1,5 +1,5 @@
 import '../../core/theme/palette.dart';
-import '../db/tables.dart' show Bucket;
+import '../db/tables.dart' show Bucket, SpendKind;
 
 class CategorySeed {
   const CategorySeed(
@@ -22,10 +22,30 @@ class CategorySeed {
   /// Lower-case merchant/VPA fragments that map to this category out of the box.
   final List<String> keywords;
 
+  /// Need or want for spends in new rows of this category.
+  SpendKind get spendKind => needSeeds.contains(name) ? SpendKind.need : SpendKind.want;
+
   /// -1 → neutral gray.
   int get color =>
       (colorIndex < 0 ? Palette.neutral : Palette.categories[colorIndex % Palette.categories.length]).toARGB32();
 }
+
+/// Seeds whose spends are needs. Every other seed starts as a want,
+/// including Other, People and Cash: money nobody has explained is not
+/// counted as a need.
+const needSeeds = {
+  'Groceries',
+  'Transport',
+  'Fuel',
+  'Bills & Utilities',
+  'Mobile & Internet',
+  'Rent & Home',
+  'Health',
+  'Education',
+  'Insurance',
+  'Personal Care',
+  'Loans & EMI',
+};
 
 const defaultCategories = <CategorySeed>[
   CategorySeed(

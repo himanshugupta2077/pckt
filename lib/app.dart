@@ -18,6 +18,7 @@ import 'data/db/tables.dart';
 import 'features/recurring/recurring_screen.dart';
 import 'features/settings/accounts_screen.dart';
 import 'features/settings/categories_screen.dart';
+import 'features/settings/needs_wants_screen.dart';
 import 'features/settings/email_connect_screen.dart';
 import 'features/settings/llm_settings_screen.dart';
 import 'features/settings/messages_screen.dart';
@@ -58,6 +59,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/settings/accounts', builder: (_, _) => const AccountsScreen()),
       GoRoute(path: '/settings/categories', builder: (_, _) => const CategoriesScreen()),
+      GoRoute(path: '/settings/needs-wants', builder: (_, _) => const NeedsWantsScreen()),
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => HomeShell(shell: shell),
         branches: [

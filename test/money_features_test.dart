@@ -21,6 +21,7 @@ Category cat(int id, String name, {bool income = false, Bucket bucket = Bucket.e
   sortOrder: id,
   countsInBudget: true,
   bucket: bucket,
+  spendKind: SpendKind.want,
 );
 
 TxnView txn(

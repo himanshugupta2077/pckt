@@ -514,7 +514,27 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
     defaultValue: const Constant(0),
   ).withConverter<Bucket>($CategoriesTable.$converterbucket);
   @override
-  List<GeneratedColumn> get $columns => [id, name, icon, color, isIncome, sortOrder, seedName, countsInBudget, bucket];
+  late final GeneratedColumnWithTypeConverter<SpendKind, int> spendKind = GeneratedColumn<int>(
+    'spend_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  ).withConverter<SpendKind>($CategoriesTable.$converterspendKind);
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    icon,
+    color,
+    isIncome,
+    sortOrder,
+    seedName,
+    countsInBudget,
+    bucket,
+    spendKind,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -577,6 +597,9 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
       bucket: $CategoriesTable.$converterbucket.fromSql(
         attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}bucket'])!,
       ),
+      spendKind: $CategoriesTable.$converterspendKind.fromSql(
+        attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}spend_kind'])!,
+      ),
     );
   }
 
@@ -586,6 +609,9 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
   }
 
   static JsonTypeConverter2<Bucket, int, int> $converterbucket = const EnumIndexConverter<Bucket>(Bucket.values);
+  static JsonTypeConverter2<SpendKind, int, int> $converterspendKind = const EnumIndexConverter<SpendKind>(
+    SpendKind.values,
+  );
 }
 
 class Category extends DataClass implements Insertable<Category> {
@@ -609,6 +635,10 @@ class Category extends DataClass implements Insertable<Category> {
   /// Bucket for spends in this category, unless a payee rule or the
   /// transaction itself says otherwise.
   final Bucket bucket;
+
+  /// Need or want for spends in this category, unless a payee rule or the
+  /// transaction itself says otherwise. Defaults to want (index 1).
+  final SpendKind spendKind;
   const Category({
     required this.id,
     required this.name,
@@ -619,6 +649,7 @@ class Category extends DataClass implements Insertable<Category> {
     this.seedName,
     required this.countsInBudget,
     required this.bucket,
+    required this.spendKind,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -636,6 +667,9 @@ class Category extends DataClass implements Insertable<Category> {
     {
       map['bucket'] = Variable<int>($CategoriesTable.$converterbucket.toSql(bucket));
     }
+    {
+      map['spend_kind'] = Variable<int>($CategoriesTable.$converterspendKind.toSql(spendKind));
+    }
     return map;
   }
 
@@ -650,6 +684,7 @@ class Category extends DataClass implements Insertable<Category> {
       seedName: seedName == null && nullToAbsent ? const Value.absent() : Value(seedName),
       countsInBudget: Value(countsInBudget),
       bucket: Value(bucket),
+      spendKind: Value(spendKind),
     );
   }
 
@@ -665,6 +700,7 @@ class Category extends DataClass implements Insertable<Category> {
       seedName: serializer.fromJson<String?>(json['seedName']),
       countsInBudget: serializer.fromJson<bool>(json['countsInBudget']),
       bucket: $CategoriesTable.$converterbucket.fromJson(serializer.fromJson<int>(json['bucket'])),
+      spendKind: $CategoriesTable.$converterspendKind.fromJson(serializer.fromJson<int>(json['spendKind'])),
     );
   }
   @override
@@ -680,6 +716,7 @@ class Category extends DataClass implements Insertable<Category> {
       'seedName': serializer.toJson<String?>(seedName),
       'countsInBudget': serializer.toJson<bool>(countsInBudget),
       'bucket': serializer.toJson<int>($CategoriesTable.$converterbucket.toJson(bucket)),
+      'spendKind': serializer.toJson<int>($CategoriesTable.$converterspendKind.toJson(spendKind)),
     };
   }
 
@@ -693,6 +730,7 @@ class Category extends DataClass implements Insertable<Category> {
     Value<String?> seedName = const Value.absent(),
     bool? countsInBudget,
     Bucket? bucket,
+    SpendKind? spendKind,
   }) => Category(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -703,6 +741,7 @@ class Category extends DataClass implements Insertable<Category> {
     seedName: seedName.present ? seedName.value : this.seedName,
     countsInBudget: countsInBudget ?? this.countsInBudget,
     bucket: bucket ?? this.bucket,
+    spendKind: spendKind ?? this.spendKind,
   );
   Category copyWithCompanion(CategoriesCompanion data) {
     return Category(
@@ -715,6 +754,7 @@ class Category extends DataClass implements Insertable<Category> {
       seedName: data.seedName.present ? data.seedName.value : this.seedName,
       countsInBudget: data.countsInBudget.present ? data.countsInBudget.value : this.countsInBudget,
       bucket: data.bucket.present ? data.bucket.value : this.bucket,
+      spendKind: data.spendKind.present ? data.spendKind.value : this.spendKind,
     );
   }
 
@@ -729,13 +769,15 @@ class Category extends DataClass implements Insertable<Category> {
           ..write('sortOrder: $sortOrder, ')
           ..write('seedName: $seedName, ')
           ..write('countsInBudget: $countsInBudget, ')
-          ..write('bucket: $bucket')
+          ..write('bucket: $bucket, ')
+          ..write('spendKind: $spendKind')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, icon, color, isIncome, sortOrder, seedName, countsInBudget, bucket);
+  int get hashCode =>
+      Object.hash(id, name, icon, color, isIncome, sortOrder, seedName, countsInBudget, bucket, spendKind);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -748,7 +790,8 @@ class Category extends DataClass implements Insertable<Category> {
           other.sortOrder == this.sortOrder &&
           other.seedName == this.seedName &&
           other.countsInBudget == this.countsInBudget &&
-          other.bucket == this.bucket);
+          other.bucket == this.bucket &&
+          other.spendKind == this.spendKind);
 }
 
 class CategoriesCompanion extends UpdateCompanion<Category> {
@@ -761,6 +804,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String?> seedName;
   final Value<bool> countsInBudget;
   final Value<Bucket> bucket;
+  final Value<SpendKind> spendKind;
   const CategoriesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -771,6 +815,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     this.seedName = const Value.absent(),
     this.countsInBudget = const Value.absent(),
     this.bucket = const Value.absent(),
+    this.spendKind = const Value.absent(),
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
@@ -782,6 +827,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     this.seedName = const Value.absent(),
     this.countsInBudget = const Value.absent(),
     this.bucket = const Value.absent(),
+    this.spendKind = const Value.absent(),
   }) : name = Value(name),
        icon = Value(icon),
        color = Value(color);
@@ -795,6 +841,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Expression<String>? seedName,
     Expression<bool>? countsInBudget,
     Expression<int>? bucket,
+    Expression<int>? spendKind,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -806,6 +853,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       if (seedName != null) 'seed_name': seedName,
       if (countsInBudget != null) 'counts_in_budget': countsInBudget,
       if (bucket != null) 'bucket': bucket,
+      if (spendKind != null) 'spend_kind': spendKind,
     });
   }
 
@@ -819,6 +867,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<String?>? seedName,
     Value<bool>? countsInBudget,
     Value<Bucket>? bucket,
+    Value<SpendKind>? spendKind,
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
@@ -830,6 +879,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       seedName: seedName ?? this.seedName,
       countsInBudget: countsInBudget ?? this.countsInBudget,
       bucket: bucket ?? this.bucket,
+      spendKind: spendKind ?? this.spendKind,
     );
   }
 
@@ -863,6 +913,9 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     if (bucket.present) {
       map['bucket'] = Variable<int>($CategoriesTable.$converterbucket.toSql(bucket.value));
     }
+    if (spendKind.present) {
+      map['spend_kind'] = Variable<int>($CategoriesTable.$converterspendKind.toSql(spendKind.value));
+    }
     return map;
   }
 
@@ -877,7 +930,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
           ..write('sortOrder: $sortOrder, ')
           ..write('seedName: $seedName, ')
           ..write('countsInBudget: $countsInBudget, ')
-          ..write('bucket: $bucket')
+          ..write('bucket: $bucket, ')
+          ..write('spendKind: $spendKind')
           ..write(')'))
         .toString();
   }
@@ -4673,6 +4727,7 @@ typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
   Value<String?> seedName,
   Value<bool> countsInBudget,
   Value<Bucket> bucket,
+  Value<SpendKind> spendKind,
 });
 typedef $$CategoriesTableUpdateCompanionBuilder = CategoriesCompanion Function({
   Value<int> id,
@@ -4684,6 +4739,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder = CategoriesCompanion Function({
   Value<String?> seedName,
   Value<bool> countsInBudget,
   Value<Bucket> bucket,
+  Value<SpendKind> spendKind,
 });
 
 final class $$CategoriesTableReferences extends BaseReferences<_$AppDatabase, $CategoriesTable, Category> {
@@ -4759,6 +4815,9 @@ class $$CategoriesTableFilterComposer extends Composer<_$AppDatabase, $Categorie
 
   ColumnWithTypeConverterFilters<Bucket, Bucket, int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => ColumnWithTypeConverterFilters(column));
+
+  ColumnWithTypeConverterFilters<SpendKind, SpendKind, int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => ColumnWithTypeConverterFilters(column));
 
   Expression<bool> transactionsRefs(Expression<bool> Function($$TransactionsTableFilterComposer f) f) {
     final $$TransactionsTableFilterComposer composer = $composerBuilder(
@@ -4848,6 +4907,9 @@ class $$CategoriesTableOrderingComposer extends Composer<_$AppDatabase, $Categor
 
   ColumnOrderings<int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => ColumnOrderings(column));
 }
 
 class $$CategoriesTableAnnotationComposer extends Composer<_$AppDatabase, $CategoriesTable> {
@@ -4877,6 +4939,9 @@ class $$CategoriesTableAnnotationComposer extends Composer<_$AppDatabase, $Categ
 
   GeneratedColumnWithTypeConverter<Bucket, int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<SpendKind, int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => column);
 
   Expression<T> transactionsRefs<T extends Object>(Expression<T> Function($$TransactionsTableAnnotationComposer a) f) {
     final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
@@ -4969,6 +5034,7 @@ class $$CategoriesTableTableManager
                 Value<String?> seedName = const Value.absent(),
                 Value<bool> countsInBudget = const Value.absent(),
                 Value<Bucket> bucket = const Value.absent(),
+                Value<SpendKind> spendKind = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
                 name: name,
@@ -4979,6 +5045,7 @@ class $$CategoriesTableTableManager
                 seedName: seedName,
                 countsInBudget: countsInBudget,
                 bucket: bucket,
+                spendKind: spendKind,
               ),
           createCompanionCallback:
               ({
@@ -4991,6 +5058,7 @@ class $$CategoriesTableTableManager
                 Value<String?> seedName = const Value.absent(),
                 Value<bool> countsInBudget = const Value.absent(),
                 Value<Bucket> bucket = const Value.absent(),
+                Value<SpendKind> spendKind = const Value.absent(),
               }) => CategoriesCompanion.insert(
                 id: id,
                 name: name,
@@ -5001,6 +5069,7 @@ class $$CategoriesTableTableManager
                 seedName: seedName,
                 countsInBudget: countsInBudget,
                 bucket: bucket,
+                spendKind: spendKind,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable<$CategoriesTable, Category>(table), $$CategoriesTableReferences(db, table, e)))

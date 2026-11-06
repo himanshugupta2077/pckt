@@ -56,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -81,6 +81,7 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, transactions, transactions.spendKind);
         await _addColumnIfMissing(m, merchantRules, merchantRules.spendKind);
       }
+      if (from < 9) await _addColumnIfMissing(m, categories, categories.spendKind);
       if (from < 5) {
         await _addColumnIfMissing(m, categories, categories.countsInBudget);
         await _addColumnIfMissing(m, transactions, transactions.inBudget);
@@ -123,6 +124,8 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(emis);
         await seedEmisFromPlan();
       }
+      // v9: need or want per category.
+      if (from < 9) await seedSpendKinds();
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -148,6 +151,7 @@ class AppDatabase extends _$AppDatabase {
             sortOrder: Value(i),
             seedName: Value(c.name),
             bucket: Value(c.bucket),
+            spendKind: Value(c.spendKind),
           ),
         );
       }
@@ -170,6 +174,7 @@ class AppDatabase extends _$AppDatabase {
           sortOrder: Value(i),
           seedName: Value(c.name),
           bucket: Value(c.bucket),
+          spendKind: Value(c.spendKind),
         ),
       );
     }
@@ -213,6 +218,17 @@ class AppDatabase extends _$AppDatabase {
       'ELSE ${no('merchant_rules.category_id')} END WHERE counts_in_budget IS NOT NULL',
       updates: {merchantRules},
     );
+  });
+
+  /// Sets each seeded category's need or want from its seed, once: on
+  /// upgrade to v9 and after restoring an older backup. Hand-made
+  /// categories keep the column default, want.
+  Future<void> seedSpendKinds() => transaction(() async {
+    for (final c in defaultCategories) {
+      await (update(
+        categories,
+      )..where((r) => r.seedName.equals(c.name))).write(CategoriesCompanion(spendKind: Value(c.spendKind)));
+    }
   });
 
   /// Turns the plan's single EMI (before v7) into the first row of the EMI
@@ -373,6 +389,13 @@ class AppDatabase extends _$AppDatabase {
       (select(rawMessages)..where((m) => m.transactionId.equals(txnId))).get();
 
   Future<List<MerchantRule>> allMerchantRules() => select(merchantRules).get();
+
+  /// Payees with their own need or want, by name.
+  Stream<List<MerchantRule>> watchSpendKindRules() =>
+      (select(merchantRules)
+            ..where((r) => r.spendKind.isNotNull())
+            ..orderBy([(r) => OrderingTerm(expression: r.pattern)]))
+          .watch();
 
   /// Null only until [ensurePlan] has run.
   Stream<MonthlyPlan?> watchPlan() => (select(plan)..limit(1)).watchSingleOrNull();
@@ -768,16 +791,24 @@ class AppDatabase extends _$AppDatabase {
         );
       });
 
-  Future<void> updateCategory(int id, {String? name, String? icon, int? color, bool? isIncome, Bucket? bucket}) =>
-      (update(categories)..where((c) => c.id.equals(id))).write(
-        CategoriesCompanion(
-          name: name == null ? const Value.absent() : Value(name),
-          icon: icon == null ? const Value.absent() : Value(icon),
-          color: color == null ? const Value.absent() : Value(color),
-          isIncome: isIncome == null ? const Value.absent() : Value(isIncome),
-          bucket: bucket == null ? const Value.absent() : Value(bucket),
-        ),
-      );
+  Future<void> updateCategory(
+    int id, {
+    String? name,
+    String? icon,
+    int? color,
+    bool? isIncome,
+    Bucket? bucket,
+    SpendKind? spendKind,
+  }) => (update(categories)..where((c) => c.id.equals(id))).write(
+    CategoriesCompanion(
+      name: name == null ? const Value.absent() : Value(name),
+      icon: icon == null ? const Value.absent() : Value(icon),
+      color: color == null ? const Value.absent() : Value(color),
+      isIncome: isIncome == null ? const Value.absent() : Value(isIncome),
+      bucket: bucket == null ? const Value.absent() : Value(bucket),
+      spendKind: spendKind == null ? const Value.absent() : Value(spendKind),
+    ),
+  );
 
   /// Persists a new display order; [ids] is the full ordered list.
   Future<void> reorderCategories(List<int> ids) => batch((b) {

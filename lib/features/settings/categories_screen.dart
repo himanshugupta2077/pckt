@@ -206,6 +206,7 @@ class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
       sortOrder: 0,
       countsInBudget: true,
       bucket: Bucket.everyday,
+      spendKind: SpendKind.want,
     );
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),

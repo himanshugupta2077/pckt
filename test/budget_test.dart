@@ -12,7 +12,13 @@ import 'package:pckt/features/stats.dart';
 
 var _id = 0;
 
-Category cat(int id, String name, {Bucket bucket = Bucket.everyday, String? seed}) => Category(
+Category cat(
+  int id,
+  String name, {
+  Bucket bucket = Bucket.everyday,
+  String? seed,
+  SpendKind spendKind = SpendKind.want,
+}) => Category(
   id: id,
   name: name,
   icon: 'other',
@@ -22,6 +28,7 @@ Category cat(int id, String name, {Bucket bucket = Bucket.everyday, String? seed
   seedName: seed,
   countsInBudget: true,
   bucket: bucket,
+  spendKind: spendKind,
 );
 
 TxnView txn(
@@ -388,7 +395,7 @@ void main() {
       expect((await db.select(db.transactions).get()).single.bucket, isNull);
       await db.setPayeeBucket('Zepto', Bucket.everyday); // bucket-only rule needs the nullable category
       expect(await db.allMerchantRules(), hasLength(2));
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 8);
+      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 9);
       await db.close();
     } finally {
       await dir.delete(recursive: true);
@@ -502,7 +509,7 @@ void main() {
       expect(views[healthkart]!.source, BudgetSource.payee);
       expect(views[plain]!.bucket, Bucket.everyday);
       expect((await db.watchPlan().first)?.fundMinor, 1000000);
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 8);
+      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 9);
       await db.close();
     } finally {
       await dir.delete(recursive: true);

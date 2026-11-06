@@ -67,6 +67,10 @@ class Categories extends Table {
   /// Bucket for spends in this category, unless a payee rule or the
   /// transaction itself says otherwise.
   IntColumn get bucket => intEnum<Bucket>().withDefault(const Constant(0))();
+
+  /// Need or want for spends in this category, unless a payee rule or the
+  /// transaction itself says otherwise. Defaults to want (index 1).
+  IntColumn get spendKind => intEnum<SpendKind>().withDefault(const Constant(1))();
 }
 
 class Transactions extends Table {

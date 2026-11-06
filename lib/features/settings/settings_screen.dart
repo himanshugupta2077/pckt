@@ -90,6 +90,13 @@ class SettingsScreen extends ConsumerWidget {
                     trailing: const Icon(PhosphorIconsBold.caretRight, size: 16),
                     onTap: () => context.push('/settings/categories'),
                   ),
+                  ListTile(
+                    leading: const Icon(PhosphorIconsRegular.chartPie),
+                    title: const Text('Needs and wants'),
+                    subtitle: const Text('What counts as a need on the Home card'),
+                    trailing: const Icon(PhosphorIconsBold.caretRight, size: 16),
+                    onTap: () => context.push('/settings/needs-wants'),
+                  ),
                 ],
               ),
             ),
