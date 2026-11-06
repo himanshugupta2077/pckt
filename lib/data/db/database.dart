@@ -37,7 +37,18 @@ extension TxnMoney on Transaction {
 }
 
 @DriftDatabase(
-  tables: [Accounts, Categories, Transactions, RawMessages, MerchantRules, Budgets, Plan, BalanceSnapshots, Emis],
+  tables: [
+    Accounts,
+    Categories,
+    Transactions,
+    RawMessages,
+    MerchantRules,
+    Budgets,
+    Plan,
+    BalanceSnapshots,
+    Emis,
+    SyncLog,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   /// Without an [executor], opens the SQLCipher-encrypted `pckt.sqlite`
@@ -56,7 +67,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -135,6 +146,8 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       }
+      // v11: the server upload log.
+      if (from < 11) await m.createTable(syncLog);
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -270,6 +283,54 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> setEmiSpendKind(int id, SpendKind kind) =>
       (update(emis)..where((e) => e.id.equals(id))).write(EmisCompanion(spendKind: Value(kind)));
+
+  /// Records one upload and keeps the newest 100.
+  Future<void> addSyncLog({
+    required String trigger,
+    required bool ok,
+    int? transactions,
+    int? bytes,
+    String? error,
+    DateTime? at,
+  }) => transaction(() async {
+    await into(syncLog).insert(
+      SyncLogCompanion.insert(
+        at: at ?? DateTime.now(),
+        trigger: trigger,
+        ok: ok,
+        transactions: Value(transactions),
+        bytes: Value(bytes),
+        error: Value(error),
+      ),
+    );
+    await customUpdate(
+      'DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY at DESC, id DESC LIMIT 100)',
+      updates: {syncLog},
+      updateKind: UpdateKind.delete,
+    );
+  });
+
+  /// The payment [txnId] if it still exists, else the one the message [smsId] belongs to
+  /// now (a parser update re-reads messages into new payments).
+  Future<int?> findTxn(int txnId, int? smsId) async {
+    final t = await (select(transactions)..where((t) => t.id.equals(txnId))).getSingleOrNull();
+    if (t != null) return t.id;
+    if (smsId == null) return null;
+    final m = await (select(rawMessages)..where((m) => m.id.equals(smsId))).getSingleOrNull();
+    return m?.transactionId;
+  }
+
+  /// The newest upload, or the newest one that worked when [okOnly].
+  Future<SyncLogData?> lastSync({bool okOnly = false}) {
+    final q = select(syncLog)
+      ..orderBy([(l) => OrderingTerm.desc(l.at), (l) => OrderingTerm.desc(l.id)])
+      ..limit(1);
+    if (okOnly) q.where((l) => l.ok.equals(true));
+    return q.getSingleOrNull();
+  }
+
+  Stream<List<SyncLogData>> watchSyncLog() =>
+      (select(syncLog)..orderBy([(l) => OrderingTerm.desc(l.at), (l) => OrderingTerm.desc(l.id)])).watch();
 
   Future<void> deleteEmi(int id) => (delete(emis)..where((e) => e.id.equals(id))).go();
 

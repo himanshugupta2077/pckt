@@ -233,6 +233,19 @@ class Emis extends Table {
   IntColumn get spendKind => intEnum<SpendKind>().withDefault(const Constant(0))();
 }
 
+/// One upload of the backup to the user's server: when, what started it
+/// (daily, app, manual), and how it went. Kept on this phone only: not in
+/// backups, so a restore keeps the phone's own history.
+class SyncLog extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get at => dateTime()();
+  TextColumn get trigger => text()();
+  BoolColumn get ok => boolean()();
+  IntColumn get transactions => integer().nullable()();
+  IntColumn get bytes => integer().nullable()();
+  TextColumn get error => text().nullable()();
+}
+
 /// What each account held at the start of a month, entered by hand.
 /// Net worth = assets − liabilities.
 class BalanceSnapshots extends Table {

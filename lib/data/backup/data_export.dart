@@ -116,9 +116,12 @@ class DataExport {
 
   // --------------------------------------------------------------- backup
 
+  /// Every table but the phone's own upload log.
+  Iterable<TableInfo> get _backedUp => db.allTables.where((t) => t.actualTableName != 'sync_log');
+
   Future<Map<String, Object?>> backup() async {
     final tables = <String, List<Map<String, Object?>>>{};
-    for (final t in db.allTables) {
+    for (final t in _backedUp) {
       final rows = await db.customSelect('SELECT * FROM "${t.actualTableName}"', readsFrom: {t}).get();
       tables[t.actualTableName] = [
         for (final r in rows) {for (final e in r.data.entries) e.key: _encodeValue(e.value)},
@@ -133,7 +136,9 @@ class DataExport {
     };
   }
 
-  Future<String> backupJson() async => const JsonEncoder.withIndent(' ').convert(await backup());
+  Future<String> backupJson() async => encodeBackup(await backup());
+
+  static String encodeBackup(Map<String, Object?> data) => const JsonEncoder.withIndent(' ').convert(data);
 
   /// Parses and validates a backup file. Throws [BackupFormatException].
   BackupSummary inspect(String json) => _validate(_decode(json)).$2;
@@ -147,10 +152,10 @@ class DataExport {
       // Rows are inserted parent-first, but defer FK checks to commit anyway
       // so self/forward references (raw_messages → transactions) never trip.
       await db.customStatement('PRAGMA defer_foreign_keys = ON');
-      for (final t in db.allTables.toList().reversed) {
+      for (final t in _backedUp.toList().reversed) {
         await db.customUpdate('DELETE FROM "${t.actualTableName}"', updates: {t}, updateKind: UpdateKind.delete);
       }
-      for (final t in db.allTables) {
+      for (final t in _backedUp) {
         final known = {for (final c in t.$columns) c.name};
         for (final row in (tables[t.actualTableName] as List?) ?? const []) {
           final entries = (row as Map).entries.where((e) => known.contains(e.key)).toList();
@@ -205,7 +210,7 @@ class DataExport {
       }
       counts['${e.key}'] = rows.length;
     }
-    for (final t in db.allTables) {
+    for (final t in _backedUp) {
       final rows = tables[t.actualTableName] as List?;
       if (rows == null) continue;
       final hasId = t.$columns.any((c) => c.name == 'id');

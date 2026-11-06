@@ -123,6 +123,19 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pckt/sync").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "ensure" -> {
+                    DailySyncWorker.ensure(this)
+                    result.success(null)
+                }
+                "cancel" -> {
+                    DailySyncWorker.cancel(this)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         ownAlerts = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pckt/alerts").apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {

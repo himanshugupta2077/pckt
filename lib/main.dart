@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'features/alerts/sort_alerts.dart';
+import 'features/settings/daily_sync_job.dart';
 import 'ingestion/share/share_intake.dart';
 import 'llm/on_device/on_device_client.dart';
 import 'providers.dart';
@@ -31,6 +32,14 @@ Future<void> sortAlertMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
   await runSortAlertJob();
+}
+
+/// Headless entry point for the 12:00 upload to the user's server (DailySyncWorker).
+@pragma('vm:entry-point')
+Future<void> dailySyncMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  await runDailySyncJob();
 }
 
 /// Registers the LiteRT-LM engine for on-device Gemma. A failure only

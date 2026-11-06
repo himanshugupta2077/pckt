@@ -89,6 +89,16 @@ or a want by its own choice (schema v10 `emis.spend_kind`), less any Loans & EMI
 kind already counted. Savings is the salary left after the other three and can be
 negative. Lending is not part of the split: money lent comes back.
 
+## Daily sync
+
+With Back up to server on, `DailySyncWorker` (WorkManager, one job per day named by its date)
+runs `dailySyncMain` in a headless engine at 12:00. It uploads the full backup unless something
+already went up since 12:00, and retries with a growing wait until 22:00. Opening the app uploads
+too when nothing went up since the latest 12:00. Every try lands in `sync_log` (schema v11, the
+newest 100 rows, not part of backups). The due check and the Settings tile read that table, since
+the background engine has its own copy of the saved settings. Settings → Sync log lists the uploads
+and the Mac's latest check, a Claude report the Mac puts on the server at `/api/pckt/analysis`.
+
 ## Currencies
 
 Amounts are stored as integers in each currency's minor unit (`lib/core/currency.dart`, decimals

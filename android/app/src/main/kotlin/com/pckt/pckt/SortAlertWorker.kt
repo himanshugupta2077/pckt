@@ -114,7 +114,8 @@ class SortAlertWorker(context: Context, params: WorkerParameters) : Worker(conte
 
     companion object {
         private const val TAG = "pckt-alerts"
-        private val lock = Any()
+        /** One headless engine (one extra DB connection) at a time, shared with DailySyncWorker. */
+        internal val lock = Any()
         private const val KEY_ID = "id"
         private const val KEY_BODY = "body"
         private const val KEY_AT = "at"

@@ -1,138 +1,114 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/icons.dart';
 import '../../core/theme/palette.dart';
 import '../../data/backup/server_backup.dart';
+import '../../data/db/database.dart';
 import '../../providers.dart';
-import 'data_section.dart' show dataExportProvider;
 
 abstract final class ServerBackupKeys {
   static const on = 'backup.server.on';
   static const address = 'backup.server.address';
-  static const lastOk = 'backup.server.lastOkMillis';
-  static const lastAttempt = 'backup.server.lastAttemptMillis';
-  static const lastError = 'backup.server.lastError';
-  static const serverHasMore = 'backup.server.serverHasMore';
+}
+
+/// Talks to the native daily job (DailySyncWorker): [ensureDailySync] keeps one queued for
+/// the next 12:00, [cancelDailySync] stops it.
+const _syncChannel = MethodChannel('pckt/sync');
+
+Future<void> ensureDailySync() async {
+  try {
+    await _syncChannel.invokeMethod('ensure');
+  } on MissingPluginException {
+    // Not on Android.
+  }
+}
+
+Future<void> cancelDailySync() async {
+  try {
+    await _syncChannel.invokeMethod('cancel');
+  } on MissingPluginException {
+    // Not on Android.
+  }
 }
 
 class ServerBackupState {
-  const ServerBackupState({
-    this.on = false,
-    this.address = '',
-    this.lastOk,
-    this.lastError,
-    this.serverHasMore = false,
-    this.running = false,
-  });
+  const ServerBackupState({this.on = false, this.address = '', this.running = false});
 
   final bool on;
   final String address;
-  final DateTime? lastOk;
-  final String? lastError;
-
-  /// The server refused the last upload because its newest backup has far more data.
-  final bool serverHasMore;
   final bool running;
 }
 
-/// Daily backup to the user's own server, off by default. Runs after the SMS sync on app
-/// resume when due; failures only show in the Settings tile.
+/// Daily backup to the user's own server, off by default. A background job uploads at
+/// 12:00 and tries again later that day if it fails; opening the app uploads too when
+/// nothing went up since the latest 12:00. Every try is in the sync log, which is also
+/// what the due check and the Settings tile read: the background job writes it through
+/// its own connection, so saved settings would be stale here.
 class ServerBackupController extends Notifier<ServerBackupState> {
   @override
   ServerBackupState build() {
     final p = ref.read(prefsProvider);
-    DateTime? at(String k) => switch (p.getInt(k)) {
-      null => null,
-      final ms => DateTime.fromMillisecondsSinceEpoch(ms),
-    };
     return ServerBackupState(
       on: p.getBool(ServerBackupKeys.on) ?? false,
       address: p.getString(ServerBackupKeys.address) ?? '',
-      lastOk: at(ServerBackupKeys.lastOk),
-      lastError: p.getString(ServerBackupKeys.lastError),
-      serverHasMore: p.getBool(ServerBackupKeys.serverHasMore) ?? false,
     );
   }
 
-  ServerBackupState _copy({bool? on, String? address, bool? running}) => ServerBackupState(
-    on: on ?? state.on,
-    address: address ?? state.address,
-    lastOk: state.lastOk,
-    lastError: state.lastError,
-    serverHasMore: state.serverHasMore,
-    running: running ?? state.running,
-  );
-
   Future<void> setOn(bool on) async {
     await ref.read(prefsProvider).setBool(ServerBackupKeys.on, on);
-    state = _copy(on: on);
-    if (on) await backUpNow();
+    state = ServerBackupState(on: on, address: state.address);
+    if (on) {
+      await ensureDailySync();
+      await backUpNow(trigger: 'manual');
+    } else {
+      await cancelDailySync();
+    }
   }
 
   /// Returns false if [address] isn't an https address.
   Future<bool> setAddress(String address) async {
     if (serverBackupUri(address) == null) return false;
     await ref.read(prefsProvider).setString(ServerBackupKeys.address, address.trim());
-    state = _copy(address: address.trim());
+    state = ServerBackupState(on: state.on, address: address.trim(), running: state.running);
     return true;
   }
 
   Future<void> backUpIfDue() async {
-    final last = ref.read(prefsProvider).getInt(ServerBackupKeys.lastAttempt);
-    if (!state.on ||
-        !isServerBackupDue(
-          lastOk: state.lastOk,
-          lastAttempt: last == null ? null : DateTime.fromMillisecondsSinceEpoch(last),
-          now: DateTime.now(),
-        )) {
+    if (!state.on) return;
+    await ensureDailySync();
+    final db = ref.read(databaseProvider);
+    if (!isServerBackupDue(
+      lastOk: (await db.lastSync(okOnly: true))?.at,
+      lastAttempt: (await db.lastSync())?.at,
+      now: DateTime.now(),
+    )) {
       return;
     }
-    await backUpNow();
+    await backUpNow(trigger: 'app');
   }
 
   /// [force] replaces a server backup that has more data. True once the
   /// server has saved it.
-  Future<bool> backUpNow({bool force = false}) async {
+  Future<bool> backUpNow({bool force = false, String trigger = 'manual'}) async {
     final uri = serverBackupUri(state.address);
     if (state.running || uri == null) return false;
-    state = _copy(running: true);
-    final prefs = ref.read(prefsProvider);
-    final now = DateTime.now();
-    await prefs.setInt(ServerBackupKeys.lastAttempt, now.millisecondsSinceEpoch);
-    final client = serverBackupClient();
-    ServerBackupResult result;
+    state = ServerBackupState(on: state.on, address: state.address, running: true);
     try {
-      final json = await ref.read(dataExportProvider).backupJson();
-      result = await uploadServerBackup(client, uri, json, force: force);
-    } catch (e) {
-      debugPrint('Server backup failed: $e');
-      result = const ServerBackupResult(ServerBackupOutcome.failed, "Couldn't make the backup");
+      final result = await backUpAndLog(ref.read(databaseProvider), uri, trigger: trigger, force: force);
+      return result.outcome == ServerBackupOutcome.saved;
     } finally {
-      client.close();
+      state = ServerBackupState(on: state.on, address: state.address);
     }
-    final ok = result.outcome == ServerBackupOutcome.saved;
-    final more = result.outcome == ServerBackupOutcome.serverHasMore;
-    if (ok) await prefs.setInt(ServerBackupKeys.lastOk, now.millisecondsSinceEpoch);
-    await prefs.setBool(ServerBackupKeys.serverHasMore, more);
-    if (result.message == null) {
-      await prefs.remove(ServerBackupKeys.lastError);
-    } else {
-      await prefs.setString(ServerBackupKeys.lastError, result.message!);
-    }
-    state = ServerBackupState(
-      on: state.on,
-      address: state.address,
-      lastOk: ok ? now : state.lastOk,
-      lastError: result.message,
-      serverHasMore: more,
-    );
-    return ok;
   }
 }
 
 final serverBackupProvider = NotifierProvider<ServerBackupController, ServerBackupState>(ServerBackupController.new);
+
+final syncLogProvider = StreamProvider<List<SyncLogData>>((ref) => ref.watch(databaseProvider).watchSyncLog());
 
 /// Settings → Data: the switch, the server address and how the last backup went.
 class ServerBackupTiles extends ConsumerWidget {
@@ -142,12 +118,17 @@ class ServerBackupTiles extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(serverBackupProvider);
     final ctrl = ref.read(serverBackupProvider.notifier);
+    final log = ref.watch(syncLogProvider).value ?? const <SyncLogData>[];
+    final last = log.firstOrNull;
+    final lastOk = log.where((l) => l.ok).firstOrNull;
+    final serverHasMore = last?.error == serverHasMoreMessage;
+    final warn = s.on && last != null && !last.ok;
+    String at(DateTime t) => DateFormat('d MMM, h:mm a').format(t);
     final status = switch (s) {
       ServerBackupState(running: true) => 'Backing up…',
-      ServerBackupState(on: false) => 'Off. Sends the full backup to your own server once a day.',
-      ServerBackupState(serverHasMore: true) => 'The server has a bigger backup. Tap to replace it.',
-      ServerBackupState(lastError: final e?) => e,
-      ServerBackupState(lastOk: final t?) => 'Last backup ${DateFormat('d MMM, h:mm a').format(t)}',
+      ServerBackupState(on: false) => 'Off. Sends the full backup to your own server daily at 12:00.',
+      _ when warn => '${last.error ?? 'Failed'}${lastOk == null ? '' : ' · last good ${at(lastOk.at)}'}',
+      _ when lastOk != null => 'Last backup ${at(lastOk.at)}',
       _ => 'No backup yet',
     };
     return Column(
@@ -155,11 +136,8 @@ class ServerBackupTiles extends ConsumerWidget {
         ListTile(
           leading: const Icon(PhosphorIconsRegular.hardDrives),
           title: const Text('Back up to server'),
-          subtitle: Text(
-            status,
-            style: s.on && (s.serverHasMore || s.lastError != null) ? const TextStyle(color: Palette.amber) : null,
-          ),
-          onTap: s.on && s.address.isNotEmpty ? () => ctrl.backUpNow(force: s.serverHasMore) : null,
+          subtitle: Text(status, style: warn ? const TextStyle(color: Palette.amber) : null),
+          onTap: s.on && s.address.isNotEmpty ? () => ctrl.backUpNow(force: serverHasMore) : null,
           trailing: Switch(
             value: s.on,
             onChanged: (on) async {
@@ -175,6 +153,15 @@ class ServerBackupTiles extends ConsumerWidget {
             title: const Text('Server address'),
             subtitle: Text(s.address),
             onTap: () => _editAddress(context, ref),
+          ),
+        if (s.on)
+          ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            title: const Text('Sync log'),
+            subtitle: const Text('Uploads and the Mac\'s daily check'),
+            trailing: const Icon(PhosphorIconsBold.caretRight, size: 16),
+            onTap: () => context.push('/settings/sync-log'),
           ),
       ],
     );
