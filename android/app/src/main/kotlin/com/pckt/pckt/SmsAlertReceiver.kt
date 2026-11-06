@@ -21,8 +21,9 @@ import java.util.Locale
  *
  * Detection here is deliberately small and conservative: a DLT bank-style
  * sender, a completed debit/credit verb and an amount. It never writes any
- * data — tapping the notification opens the app, whose resume sync runs the
- * real Dart pipeline (parse → dedup → store).
+ * data itself: SortAlertWorker then runs the real Dart pipeline (parse →
+ * dedup → store) and, for a payment the app can't place, replaces this
+ * alert with a question ([ask]).
  */
 class SmsAlertReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -39,7 +40,10 @@ class SmsAlertReceiver : BroadcastReceiver() {
             .forEach { (sender, msgs) ->
                 val body = msgs.joinToString("") { it.displayMessageBody ?: it.messageBody ?: "" }
                 val alert = detect(sender, body, homeCurrency(context)) ?: return@forEach
-                notify(context, alert, (sender + body).hashCode())
+                val id = (sender + body).hashCode()
+                if (notify(context, alert, id)) {
+                    SortAlertWorker.enqueue(context, id, body, msgs.first().timestampMillis)
+                }
             }
     }
 
@@ -161,10 +165,12 @@ class SmsAlertReceiver : BroadcastReceiver() {
             )
         }
 
-        private fun notify(context: Context, alert: Alert, id: Int) {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) return
+        private fun canNotify(context: Context) = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+        /** False when notifications are off (then there is nothing to turn into a question). */
+        private fun notify(context: Context, alert: Alert, id: Int): Boolean {
+            if (!canNotify(context)) return false
             ensureChannel(context)
             val open = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -183,11 +189,58 @@ class SmsAlertReceiver : BroadcastReceiver() {
                 .setAutoCancel(true)
                 .setContentIntent(pi)
                 .build()
-            try {
-                NotificationManagerCompat.from(context).notify(id, notification)
-            } catch (e: SecurityException) {
-                // Permission revoked between the check and the post.
+            return post(context, id, notification)
+        }
+
+        private fun post(context: Context, id: Int, notification: android.app.Notification): Boolean = try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+            true
+        } catch (e: SecurityException) {
+            // Permission revoked between the check and the post.
+            false
+        }
+
+        /**
+         * Replaces alert [id] with "₹250 to Ramesh K · Which bucket?" and
+         * answer buttons (SortActionReceiver); the body opens the payment.
+         * Silent: the plain alert already made a sound.
+         */
+        fun ask(context: Context, id: Int, title: String, text: String, credit: Boolean, txnId: Long, rawId: Long) {
+            if (!canNotify(context)) return
+            ensureChannel(context)
+            val open = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(MainActivity.EXTRA_OPEN_TXN, txnId)
             }
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_pckt)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setOnlyAlertOnce(true)
+                .setAutoCancel(true)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        context, id, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                )
+            val choices = if (credit) listOf("income" to "Income", "ignore" to "Ignore")
+            else listOf("everyday" to "Everyday", "fixed" to "Fixed", "ignore" to "Ignore")
+            choices.forEachIndexed { i, (choice, label) ->
+                val answer = Intent(context, SortActionReceiver::class.java).apply {
+                    action = "com.pckt.pckt.SORT.$choice"
+                    putExtra(SortActionReceiver.EXTRA_CHOICE, choice)
+                    putExtra(SortActionReceiver.EXTRA_TXN, txnId)
+                    putExtra(SortActionReceiver.EXTRA_RAW, rawId)
+                    putExtra(SortActionReceiver.EXTRA_NOTIFICATION, id)
+                }
+                val pi = PendingIntent.getBroadcast(
+                    context, id * 4 + i, answer, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                builder.addAction(0, label, pi)
+            }
+            post(context, id, builder.build())
         }
     }
 }

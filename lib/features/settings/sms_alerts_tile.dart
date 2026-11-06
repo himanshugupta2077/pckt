@@ -17,7 +17,7 @@ class SmsAlertsTile extends ConsumerWidget {
         contentPadding: EdgeInsets.zero,
         secondary: const Icon(PhosphorIconsRegular.bellRinging),
         title: const Text('Instant alerts'),
-        subtitle: const Text('Notify me when a bank SMS shows money moving'),
+        subtitle: const Text("Notify me when a bank SMS shows money moving, and ask about payments it can't place"),
         value: on,
         onChanged: (v) => ref.read(smsAlertsProvider.notifier).set(v),
       ),

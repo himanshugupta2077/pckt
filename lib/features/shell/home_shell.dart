@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,6 +10,8 @@ import '../../ingestion/ingestion_service.dart';
 import '../../llm/llm_providers.dart';
 import '../../providers.dart';
 import '../activity/add_transaction_sheet.dart';
+import '../activity/transaction_sheet.dart';
+import '../alerts/sort_alerts.dart';
 import 'share_outcome.dart';
 import '../budgets/budget_providers.dart';
 import '../budgets/in_budget.dart' show bucketBudgetMinor;
@@ -31,9 +34,25 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void initState() {
     super.initState();
     // Pull new SMS (and email) whenever the app comes to the foreground.
-    _lifecycle = AppLifecycleListener(onResume: _sync);
+    _lifecycle = AppLifecycleListener(
+      onResume: () async {
+        await _alertsChanged();
+        await _sync();
+        await _openFromAlert();
+      },
+    );
+    alertChannel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'changed':
+          await _alertsChanged();
+        case 'open':
+          await _openFromAlert();
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _alertsChanged();
       await _sync();
+      await _openFromAlert();
       await _repairOnce();
       await _mergeCardBillsOnce();
       await ref.read(smsAlertsProvider.notifier).ensurePermission();
@@ -81,6 +100,30 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     await prefs.setBool(PrefKeys.mergedCardBills, true);
     debugPrint('Card bills:\n${log.join('\n')}');
+  }
+
+  /// Notification buttons tapped meanwhile, and payments the background
+  /// alert check stored through its own connection (which this one's live
+  /// lists don't see on their own).
+  Future<void> _alertsChanged() async {
+    final db = ref.read(databaseProvider);
+    try {
+      await applyAlertAnswers(db, await takeAlertAnswers());
+    } catch (e) {
+      debugPrint('Alert answers failed: $e');
+    }
+    db.markTablesUpdated(db.allTables);
+  }
+
+  /// The payment whose question notification was tapped.
+  Future<void> _openFromAlert() async {
+    final int? id;
+    try {
+      id = await alertChannel.invokeMethod<int>('takeOpen');
+    } on MissingPluginException {
+      return;
+    }
+    if (id != null && mounted) await showTransactionSheet(context, id);
   }
 
   void _announce(IngestReport? report) {

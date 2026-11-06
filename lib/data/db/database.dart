@@ -500,8 +500,8 @@ class AppDatabase extends _$AppDatabase {
 
   /// The bucket for every payment to [merchant] (null removes the answer).
   /// Payments to it that had their own bucket follow the rule from now on,
-  /// so one pick decides for the payee, except ones marked Big & occasional:
-  /// that is a call about one purchase.
+  /// so one pick decides for the payee, except ones marked Big & occasional
+  /// or Ignore (money lent or paid back): those are calls about one payment.
   Future<void> setPayeeBucket(String merchant, Bucket? bucket) => transaction(() async {
     final pattern = merchant.toLowerCase();
     if (pattern.isEmpty) return;
@@ -510,7 +510,7 @@ class AppDatabase extends _$AppDatabase {
       onConflict: DoUpdate((_) => MerchantRulesCompanion(bucket: Value(bucket)), target: [merchantRules.pattern]),
     );
     await (update(transactions)
-          ..where((t) => t.merchant.lower().equals(pattern) & t.bucket.equalsValue(Bucket.fund).not()))
+          ..where((t) => t.merchant.lower().equals(pattern) & t.bucket.isNotInValues(const [Bucket.fund, Bucket.ignore])))
         .write(const TransactionsCompanion(bucket: Value(null)));
   });
 

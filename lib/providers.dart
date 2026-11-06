@@ -17,8 +17,11 @@ import 'ingestion/sms/sms_source.dart';
 
 final prefsProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError('overridden in main'));
 
+/// The app database, with payments shown from the data start (Oct 2026).
+AppDatabase openShownDatabase() => AppDatabase()..shownFrom = DateTime(2026, 10);
+
 final databaseProvider = Provider<AppDatabase>((ref) {
-  final db = AppDatabase()..shownFrom = DateTime(2026, 10);
+  final db = openShownDatabase();
   ref.onDispose(db.close);
   return db;
 });

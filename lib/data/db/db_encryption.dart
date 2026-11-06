@@ -418,12 +418,15 @@ DatabaseConnection openAppDatabase({SecretStore? secrets, Future<String> Functio
       final key = plan.key;
       return NativeDatabase.createBackgroundConnection(
         File(path),
-        setup: key == null
-            ? null
-            : (db) {
-                db.execute('PRAGMA key = ${rawKeyLiteral(key)}');
-                db.select('SELECT count(*) FROM sqlite_master');
-              },
+        setup: (db) {
+          if (key != null) {
+            db.execute('PRAGMA key = ${rawKeyLiteral(key)}');
+            db.select('SELECT count(*) FROM sqlite_master');
+          }
+          // A background alert check (sort_alerts.dart) can hold a second
+          // connection for a few seconds: wait for its lock, don't fail.
+          db.execute('PRAGMA busy_timeout = 5000');
+        },
       );
     }),
   );

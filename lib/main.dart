@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:background_downloader/background_downloader.dart' show FileDownloader;
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'features/alerts/sort_alerts.dart';
 import 'ingestion/share/share_intake.dart';
 import 'llm/on_device/on_device_client.dart';
 import 'providers.dart';
@@ -21,6 +23,14 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   await _initOnDeviceAi();
   runApp(ProviderScope(overrides: [prefsProvider.overrideWithValue(prefs)], child: const PcktApp()));
+}
+
+/// Headless entry point for the background alert check (SortAlertWorker).
+@pragma('vm:entry-point')
+Future<void> sortAlertMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  await runSortAlertJob();
 }
 
 /// Registers the LiteRT-LM engine for on-device Gemma. A failure only

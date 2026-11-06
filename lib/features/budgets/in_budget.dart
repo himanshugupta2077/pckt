@@ -70,13 +70,20 @@ const _vagueCategories = {'Other', 'People'};
 /// merchant (see [merchantCounts]).
 bool needsSorting(TxnView v, Map<String, int> merchantCounts) {
   final t = v.txn;
-  if (t.isTransfer || t.direction != TxnDirection.debit || t.bucket != null) return false;
-  if (v.rule?.bucket != null) return false;
-  final c = v.category;
-  if (c != null && !_vagueCategories.contains(c.seedName ?? c.name)) return false;
+  if (t.direction != TxnDirection.debit || !isUnclear(v)) return false;
   final amount = t.homeMinor ?? 0;
   final seen = t.merchant == null ? 1 : merchantCounts[t.merchant!.toLowerCase()] ?? 1;
   return amount >= toSortMinMinor || seen >= 2;
+}
+
+/// The app can't tell what this payment is: not a transfer, no bucket of
+/// its own or from its payee, and no category or only a vague one. Either
+/// direction; [needsSorting] adds its thresholds for debits.
+bool isUnclear(TxnView v) {
+  final t = v.txn;
+  if (t.isTransfer || t.bucket != null || v.rule?.bucket != null) return false;
+  final c = v.category;
+  return c == null || _vagueCategories.contains(c.seedName ?? c.name);
 }
 
 Map<String, int> merchantCounts(Iterable<TxnView> txns) {

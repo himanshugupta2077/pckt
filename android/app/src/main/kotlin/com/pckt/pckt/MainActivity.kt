@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
-import android.provider.Telephony
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,6 +28,8 @@ class MainActivity : FlutterFragmentActivity() {
     /** Text shared to Pckt / pckt://ingest links not yet taken by Dart. */
     private val pendingShares = ArrayList<Map<String, Any?>>()
     private var shareChannel: MethodChannel? = null
+    private var pendingOpen: Long? = null
+    private var ownAlerts: MethodChannel? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Apply "Hide in recent apps" before the first frame, so even the
@@ -81,7 +82,7 @@ class MainActivity : FlutterFragmentActivity() {
                     val limit = call.argument<Int>("limit") ?: 5000
                     io.execute {
                         try {
-                            val rows = readInbox(since, limit)
+                            val rows = readSmsInbox(this, since, limit)
                             main.post { result.success(rows) }
                         } catch (e: SecurityException) {
                             main.post { result.error("PERMISSION", e.message, null) }
@@ -122,6 +123,20 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        ownAlerts = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pckt/alerts").apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "takeAnswers" -> result.success(SortAnswers.take(this@MainActivity))
+                    "takeOpen" -> {
+                        result.success(pendingOpen)
+                        pendingOpen = null
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        alerts = ownAlerts
+        captureOpen(intent)
         shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pckt/share").apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -140,6 +155,16 @@ class MainActivity : FlutterFragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (captureShare(intent)) shareChannel?.invokeMethod("pending", null)
+        if (captureOpen(intent)) alerts?.invokeMethod("open", null)
+    }
+
+    /** A tapped "which bucket?" question: Dart opens that payment (takeOpen). */
+    private fun captureOpen(intent: Intent?): Boolean {
+        val id = intent?.getLongExtra(EXTRA_OPEN_TXN, -1) ?: -1
+        if (id < 0) return false
+        intent?.removeExtra(EXTRA_OPEN_TXN)
+        pendingOpen = id
+        return true
     }
 
     /**
@@ -212,35 +237,8 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /** Inbox messages newer than [since], oldest first. */
-    private fun readInbox(since: Long, limit: Int): List<Map<String, Any?>> {
-        val out = ArrayList<Map<String, Any?>>()
-        contentResolver.query(
-            Telephony.Sms.Inbox.CONTENT_URI,
-            arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE),
-            "${Telephony.Sms.DATE} > ?",
-            arrayOf(since.toString()),
-            "${Telephony.Sms.DATE} ASC",
-        )?.use { c ->
-            val id = c.getColumnIndexOrThrow(Telephony.Sms._ID)
-            val addr = c.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-            val body = c.getColumnIndexOrThrow(Telephony.Sms.BODY)
-            val date = c.getColumnIndexOrThrow(Telephony.Sms.DATE)
-            while (c.moveToNext() && out.size < limit) {
-                out.add(
-                    mapOf(
-                        "id" to c.getLong(id).toString(),
-                        "address" to (c.getString(addr) ?: ""),
-                        "body" to (c.getString(body) ?: ""),
-                        "date" to c.getLong(date),
-                    )
-                )
-            }
-        }
-        return out
-    }
-
     override fun onDestroy() {
+        if (alerts === ownAlerts) alerts = null
         io.shutdown()
         super.onDestroy()
     }
@@ -249,6 +247,10 @@ class MainActivity : FlutterFragmentActivity() {
         private const val SMS_REQUEST = 4201
         private const val NOTIFY_REQUEST = 4202
         const val EXTRA_FROM_ALERT = "com.pckt.pckt.FROM_ALERT"
+        const val EXTRA_OPEN_TXN = "com.pckt.pckt.OPEN_TXN"
+
+        /** The running app's alert channel, for "changed" / "open"; null when it isn't running. */
+        var alerts: MethodChannel? = null
         private const val EXTRA_HANDLED = "com.pckt.pckt.SHARE_HANDLED"
         // Must match SecurityPrefKeys.hideInRecents on the Dart side.
         private const val HIDE_IN_RECENTS_PREF = "security.hideInRecents"
