@@ -10,6 +10,7 @@ import 'package:pckt/features/dashboard/salary_card.dart';
 import 'package:pckt/features/dashboard/salary_split.dart';
 
 import 'budget_test.dart' show cat, memoryDb, txn;
+import 'plan_test.dart' show emi;
 
 void main() {
   final groceries = cat(1, 'Groceries', seed: 'Groceries', spendKind: SpendKind.need);
@@ -50,7 +51,7 @@ void main() {
   test('savings is the rest of the salary, lending stays out, percents add up to 100', () {
     final split = SalarySplit(
       salaryMinor: 14166700,
-      emiMinor: 4258066,
+      emis: [emi(4258066, null)],
       txns: [
         txn(4400000, category: invest),
         txn(1596500, category: invest, dir: TxnDirection.credit),
@@ -71,11 +72,22 @@ void main() {
     expect(percentOf(1, 0), 0);
   });
 
-  test('an EMI paid from the bank is not counted again from the plan list', () {
-    final loans = cat(7, 'Loans & EMI', bucket: Bucket.outside, seed: 'Loans & EMI', spendKind: SpendKind.need);
-    final split = SalarySplit(salaryMinor: 14166700, emiMinor: 4258066, txns: [txn(3820000, category: loans)]);
-    expect(split.needs, 4258066);
-    expect(split.emiPaid, 3820000);
+  test('each EMI is a need or a want, and one paid from the bank is not counted again', () {
+    final loans = cat(7, 'Loans & EMI', bucket: Bucket.outside, seed: 'Loans & EMI');
+    final split = SalarySplit(
+      salaryMinor: 14166700,
+      emis: [
+        emi(3861418, null, 'MacBook', SpendKind.want),
+        emi(396648, null, 'AC', SpendKind.want),
+        emi(500000, null, 'Home'),
+      ],
+      txns: [
+        txn(396648, category: loans),
+        txn(100000, category: groceries),
+      ],
+    );
+    expect(split.wants, 3861418 + 396648);
+    expect(split.needs, 500000 + 100000);
   });
 
   test('spending more than the salary shows negative savings', () {
@@ -88,7 +100,7 @@ void main() {
   testWidgets('the card shows four percents with small amounts, and nothing else', (tester) async {
     final split = SalarySplit(
       salaryMinor: 14166700,
-      emiMinor: 4258066,
+      emis: [emi(4258066, null)],
       txns: [
         txn(2803500, category: invest),
         txn(341200, category: groceries),
@@ -168,6 +180,30 @@ void main() {
         db = AppDatabase(NativeDatabase(file));
         expect(await kindOf(db, 'Health'), SpendKind.need);
         expect(await kindOf(db, 'Subscriptions'), SpendKind.want);
+        await db.close();
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    });
+
+    test('v9 → v10 migration adds EMI need or want and makes Loans & EMI a want', () async {
+      final dir = await Directory.systemTemp.createTemp('pckt_mig10');
+      final file = File('${dir.path}/db.sqlite');
+      try {
+        var db = AppDatabase(NativeDatabase(file));
+        await db.saveEmi(name: 'MacBook', amountMinor: 3861418, lastMonth: null);
+        await db.customStatement("UPDATE categories SET spend_kind = 0 WHERE seed_name = 'Loans & EMI'");
+        await db.customStatement('ALTER TABLE emis DROP COLUMN spend_kind');
+        await db.customStatement('PRAGMA user_version = 9');
+        await db.close();
+
+        db = AppDatabase(NativeDatabase(file));
+        expect(await kindOf(db, 'Loans & EMI'), SpendKind.want);
+        expect(await kindOf(db, 'Groceries'), SpendKind.need);
+        final macbook = (await db.watchEmis().first).single;
+        expect(macbook.spendKind, SpendKind.need);
+        await db.setEmiSpendKind(macbook.id, SpendKind.want);
+        expect((await db.watchEmis().first).single.spendKind, SpendKind.want);
         await db.close();
       } finally {
         await dir.delete(recursive: true);

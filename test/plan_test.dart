@@ -29,8 +29,8 @@ MonthlyPlan plan({
   goal2Due: goal2Due,
 );
 
-Emi emi(int amount, DateTime? last, [String name = 'Laptop']) =>
-    Emi(id: amount, name: name, amountMinor: amount, lastMonth: last);
+Emi emi(int amount, DateTime? last, [String name = 'Laptop', SpendKind kind = SpendKind.need]) =>
+    Emi(id: amount, name: name, amountMinor: amount, lastMonth: last, spendKind: kind);
 
 void main() {
   final nov = DateTime(2026, 11);

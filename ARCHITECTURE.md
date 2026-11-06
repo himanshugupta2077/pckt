@@ -84,8 +84,9 @@ each with its amount small under it. Invested is the invest bucket plus anything
 category, net of money that came back. Each other spend is a need or a want: the payment's own
 answer, then the payee's, then the category's (schema v9 `categories.spend_kind`, set in Settings →
 Needs and wants), else want. Seeds start as needs for groceries, bills, rent, health, transport and
-the like; everything else, Other included, starts as a want. The plan's EMIs are added to needs, less
-any Loans & EMI payment already counted. Savings is the salary left after the other three and can be
+the like; everything else, Other and Loans & EMI included, starts as a want. Each plan EMI is a need
+or a want by its own choice (schema v10 `emis.spend_kind`), less any Loans & EMI payment of the same
+kind already counted. Savings is the salary left after the other three and can be
 negative. Lending is not part of the split: money lent comes back.
 
 ## Currencies

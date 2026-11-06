@@ -6,6 +6,7 @@ import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../dashboard/salary_split.dart';
+import '../plan/plan_providers.dart' show emisProvider;
 
 final _payeeKindsProvider = StreamProvider<List<MerchantRule>>(
   (ref) => ref.watch(databaseProvider).watchSpendKindRules(),
@@ -25,6 +26,7 @@ class NeedsWantsScreen extends ConsumerWidget {
         if (categoryHasSpendKind(c)) c,
     ];
     final payees = ref.watch(_payeeKindsProvider).value ?? const <MerchantRule>[];
+    final emis = ref.watch(emisProvider).value ?? const <Emi>[];
     final muted = context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant);
     return Scaffold(
       appBar: AppBar(title: const Text('Needs and wants')),
@@ -35,7 +37,7 @@ class NeedsWantsScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
             child: Text(
               'Each spend counts as a need or a want on the Home card. A payee\'s answer wins over its category, '
-              'and an answer on one payment wins over both. Plan EMIs are always needs.',
+              'and an answer on one payment wins over both.',
               style: muted,
             ),
           ),
@@ -49,6 +51,15 @@ class NeedsWantsScreen extends ConsumerWidget {
                 onChanged: (k) => db.updateCategory(c.id, spendKind: k),
               ),
             ),
+          if (emis.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: SectionHeader('EMIs')),
+            for (final e in emis)
+              ListTile(
+                title: Text(e.name),
+                trailing: _KindToggle(value: e.spendKind, onChanged: (k) => db.setEmiSpendKind(e.id, k)),
+              ),
+          ],
           if (payees.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: SectionHeader('Payees')),

@@ -24,14 +24,14 @@ class SalaryCard extends ConsumerWidget {
     if (txns == null) return const SizedBox.shrink();
     final month = ref.watch(selectedMonthProvider);
     final salary = ref.watch(planProvider).value?.salaryMinor ?? 0;
-    final emi = [
+    final emis = [
       for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
-        if (emiActive(e, month)) e.amountMinor,
-    ].fold(0, (a, b) => a + b);
+        if (emiActive(e, month)) e,
+    ];
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SalarySplitView(
-        split: SalarySplit(txns: txns, salaryMinor: salary, emiMinor: emi),
+        split: SalarySplit(txns: txns, salaryMinor: salary, emis: emis),
       ),
     );
   }
@@ -140,8 +140,13 @@ Future<void> showSalarySheet(BuildContext context, SalaryPile pile) => showModal
           for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
             if (emiActive(e, month)) e,
         ];
-        final emi = emis.fold(0, (s, e) => s + e.amountMinor);
-        final split = SalarySplit(txns: txns, salaryMinor: salary, emiMinor: emi);
+        final split = SalarySplit(txns: txns, salaryMinor: salary, emis: emis);
+        final kind = pile == SalaryPile.needs ? SpendKind.need : SpendKind.want;
+        final pileEmis = [
+          if (pile != SalaryPile.invested)
+            for (final e in emis)
+              if (e.spendKind == kind) e,
+        ];
         final (label, total, rows) = switch (pile) {
           SalaryPile.invested => ('Invested', split.invested, split.investTxns),
           SalaryPile.needs => ('Needs', split.needs, split.needTxns),
@@ -158,16 +163,15 @@ Future<void> showSalarySheet(BuildContext context, SalaryPile pile) => showModal
                 style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
-            if (pile == SalaryPile.needs)
-              for (final e in emis)
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  title: Text(e.name),
-                  subtitle: const Text('EMI, from the plan'),
-                  trailing: Text(money(e.amountMinor), style: context.text.titleSmall),
-                  onTap: () => context.push('/plan'),
-                ),
-            if (rows.isEmpty && (pile != SalaryPile.needs || emis.isEmpty))
+            for (final e in pileEmis)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                title: Text(e.name),
+                subtitle: const Text('EMI, from the plan'),
+                trailing: Text(money(e.amountMinor), style: context.text.titleSmall),
+                onTap: () => context.push('/plan'),
+              ),
+            if (rows.isEmpty && pileEmis.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Text('Nothing this month.', style: context.text.bodyMedium),

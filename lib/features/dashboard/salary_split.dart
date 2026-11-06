@@ -62,14 +62,15 @@ String percentLabel(int n) => '${n.isNegative ? '−' : ''}${n.abs()}%';
 
 /// This month's salary split. [txns] are already the month.
 ///
-/// [emiMinor] is the plan's active instalments. A card EMI is not its own
-/// transaction, so it is added to needs, less any Loans & EMI payment
-/// already counted there, so a bank-debited EMI is not counted twice.
-/// Savings is what the salary has
-/// left after invested, needs and wants. Lending is not part of it: money
-/// lent comes back.
+/// [emis] are the plan's instalments active this month. A card EMI is not
+/// its own transaction, so each is added to needs or wants by its own
+/// choice, less any Loans & EMI payment of the same kind already counted,
+/// so a bank-debited EMI is not counted twice. Savings is what the salary
+/// has left after invested, needs and wants. Lending is not part of it:
+/// money lent comes back.
 class SalarySplit {
-  SalarySplit({required List<TxnView> txns, required this.salaryMinor, this.emiMinor = 0}) {
+  SalarySplit({required List<TxnView> txns, required this.salaryMinor, this.emis = const []}) {
+    final paid = {SpendKind.need: 0, SpendKind.want: 0};
     for (final v in txns) {
       final amount = v.txn.homeMinor;
       if (amount == null) continue;
@@ -82,29 +83,27 @@ class SalarySplit {
         case SpendSource.transfer || SpendSource.income || SpendSource.lending:
           break;
         case SpendSource.manual || SpendSource.payee || SpendSource.category || SpendSource.fallback:
-          switch (d.kind) {
+          final k = d.kind!;
+          if ((v.category?.seedName ?? v.category?.name) == 'Loans & EMI') paid[k] = paid[k]! + amount;
+          switch (k) {
             case SpendKind.need:
               needs += amount;
               needTxns.add(v);
-              if ((v.category?.seedName ?? v.category?.name) == 'Loans & EMI') emiPaid += amount;
             case SpendKind.want:
               wants += amount;
               wantTxns.add(v);
-            case null:
-              break;
           }
       }
     }
-    needs += math.max(0, emiMinor - emiPaid);
+    int emi(SpendKind k) => emis.where((e) => e.spendKind == k).fold(0, (s, e) => s + e.amountMinor);
+    needs += math.max(0, emi(SpendKind.need) - paid[SpendKind.need]!);
+    wants += math.max(0, emi(SpendKind.want) - paid[SpendKind.want]!);
   }
 
   final int salaryMinor;
 
-  /// Plan EMIs, included in [needs] less [emiPaid].
-  final int emiMinor;
-
-  /// Loans & EMI payments this month, counted as needs.
-  int emiPaid = 0;
+  /// Plan EMIs, each in [needs] or [wants] by its own choice.
+  final List<Emi> emis;
 
   int invested = 0;
   int needs = 0;

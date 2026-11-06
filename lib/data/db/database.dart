@@ -56,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -126,6 +126,15 @@ class AppDatabase extends _$AppDatabase {
       }
       // v9: need or want per category.
       if (from < 9) await seedSpendKinds();
+      // v10: need or want per EMI. Loans & EMI stops being a need by default.
+      if (from < 10) {
+        await _addColumnIfMissing(m, emis, emis.spendKind);
+        if (from == 9) {
+          await (update(categories)..where((c) => c.seedName.equals('Loans & EMI'))).write(
+            const CategoriesCompanion(spendKind: Value(SpendKind.want)),
+          );
+        }
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -243,10 +252,24 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Emi>> watchEmis() => (select(emis)..orderBy([(e) => OrderingTerm(expression: e.id)])).watch();
 
-  Future<void> saveEmi({int? id, required String name, required int amountMinor, required DateTime? lastMonth}) {
-    final row = EmisCompanion(name: Value(name), amountMinor: Value(amountMinor), lastMonth: Value(lastMonth));
+  Future<void> saveEmi({
+    int? id,
+    required String name,
+    required int amountMinor,
+    required DateTime? lastMonth,
+    SpendKind spendKind = SpendKind.need,
+  }) {
+    final row = EmisCompanion(
+      name: Value(name),
+      amountMinor: Value(amountMinor),
+      lastMonth: Value(lastMonth),
+      spendKind: Value(spendKind),
+    );
     return id == null ? into(emis).insert(row) : (update(emis)..where((e) => e.id.equals(id))).write(row);
   }
+
+  Future<void> setEmiSpendKind(int id, SpendKind kind) =>
+      (update(emis)..where((e) => e.id.equals(id))).write(EmisCompanion(spendKind: Value(kind)));
 
   Future<void> deleteEmi(int id) => (delete(emis)..where((e) => e.id.equals(id))).go();
 

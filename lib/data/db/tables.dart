@@ -228,6 +228,9 @@ class Emis extends Table {
 
   /// The 1st of the last month it is paid; null while unknown.
   DateTimeColumn get lastMonth => dateTime().nullable()();
+
+  /// Need or want, for the salary card. Defaults to need (index 0).
+  IntColumn get spendKind => intEnum<SpendKind>().withDefault(const Constant(0))();
 }
 
 /// What each account held at the start of a month, entered by hand.

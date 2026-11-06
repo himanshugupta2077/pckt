@@ -32,7 +32,7 @@ class CategorySeed {
 
 /// Seeds whose spends are needs. Every other seed starts as a want,
 /// including Other, People and Cash: money nobody has explained is not
-/// counted as a need.
+/// counted as a need. Loans & EMI is a want until each loan is decided.
 const needSeeds = {
   'Groceries',
   'Transport',
@@ -44,7 +44,6 @@ const needSeeds = {
   'Education',
   'Insurance',
   'Personal Care',
-  'Loans & EMI',
 };
 
 const defaultCategories = <CategorySeed>[

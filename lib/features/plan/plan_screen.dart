@@ -263,12 +263,14 @@ class _EmiList extends ConsumerWidget {
   }
 }
 
-/// Adds or edits one EMI: name, amount per month, last month paid.
+/// Adds or edits one EMI: name, amount per month, last month paid, and
+/// whether it is a need or a want.
 Future<void> showEmiDialog(BuildContext context, WidgetRef ref, Emi? emi) async {
   final home = Currencies.home;
   final name = TextEditingController(text: emi?.name);
   final amount = TextEditingController(text: emi == null ? '' : amountInputText(emi.amountMinor, currency: home));
   var last = emi?.lastMonth;
+  var kind = emi?.spendKind ?? SpendKind.need;
   final db = ref.read(databaseProvider);
   await showDialog<void>(
     context: context,
@@ -306,6 +308,21 @@ Future<void> showEmiDialog(BuildContext context, WidgetRef ref, Emi? emi) async 
                 if (picked != null) setState(() => last = monthStart(picked));
               },
             ),
+            Row(
+              children: [
+                const Expanded(child: Text('On the salary card')),
+                SegmentedButton<SpendKind>(
+                  segments: const [
+                    ButtonSegment(value: SpendKind.need, label: Text('Need')),
+                    ButtonSegment(value: SpendKind.want, label: Text('Want')),
+                  ],
+                  selected: {kind},
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  onSelectionChanged: (k) => setState(() => kind = k.first),
+                ),
+              ],
+            ),
           ],
         ),
         actions: [
@@ -322,7 +339,13 @@ Future<void> showEmiDialog(BuildContext context, WidgetRef ref, Emi? emi) async 
             onPressed: () async {
               final minor = parseAmountInput(amount.text, currency: home);
               if (name.text.trim().isEmpty || minor == null || minor <= 0) return;
-              await db.saveEmi(id: emi?.id, name: name.text.trim(), amountMinor: minor, lastMonth: last);
+              await db.saveEmi(
+                id: emi?.id,
+                name: name.text.trim(),
+                amountMinor: minor,
+                lastMonth: last,
+                spendKind: kind,
+              );
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Save'),
