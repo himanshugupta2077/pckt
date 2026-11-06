@@ -52,7 +52,7 @@ void main() {
     expect(balancesDue(DateTime(2026, 11, 2), [snap(oct, 'Bank', 0)]), isTrue);
   });
 
-  testWidgets('the balances sheet saves every label; the Buckets card renders', (tester) async {
+  testWidgets('the balances sheet saves every label; the Budgets card renders', (tester) async {
     SharedPreferences.setMockInitialValues({PrefKeys.homeCurrency: 'INR'});
     final prefs = (await tester.runAsync(SharedPreferences.getInstance))!;
     final db = memoryDb();
@@ -98,9 +98,10 @@ void main() {
 
     await settle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Fill in'), findsOneWidget);
-    expect(find.text('Back up now'), findsOneWidget);
-    expect(find.text('Buckets'), findsOneWidget);
+    expect(find.textContaining('Fill in '), findsOneWidget);
+    expect(find.text('Monthly net worth'), findsOneWidget);
+    expect(find.text('Budgets'), findsOneWidget);
+    expect(find.text('Not budgeted'), findsOneWidget);
     expect(find.text('₹649 of ₹10,000', findRichText: true), findsOneWidget);
 
     await tester.tap(find.text('open'));

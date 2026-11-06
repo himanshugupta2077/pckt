@@ -11,6 +11,7 @@ import '../../ui/amount_field.dart';
 import '../../ui/widgets.dart';
 import '../budgets/budget_providers.dart';
 import '../plan/plan_providers.dart';
+import '../plan/plan_screen.dart' show PlanLine;
 
 String _monthYear(DateTime m) => DateFormat('MMM yyyy').format(m);
 
@@ -36,6 +37,9 @@ class GoalsScreen extends ConsumerWidget {
                     padding: const EdgeInsets.only(left: 4, bottom: 12),
                     child: Text('Goals', style: context.text.headlineSmall),
                   ),
+                  // The plan's monthly left over, which the goals are paid from.
+                  const PlanLine(),
+                  const SizedBox(height: 12),
                   if (outcome != null && outcome.goals.isNotEmpty)
                     AppCard(
                       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),

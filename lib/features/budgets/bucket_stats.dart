@@ -85,6 +85,7 @@ class BucketSummary {
   BucketSummary({required List<TxnView> txns, required DateTime month}) {
     final thisMonth = txns.where((v) => inMonth(v.txn.occurredAt, month)).toList();
     final totals = bucketTotals(thisMonth);
+    everyday = totals[Bucket.everyday]!;
     fixed = totals[Bucket.fixed]!;
     fund = totals[Bucket.fund]!;
     outside = outsideByCategory(thisMonth);
@@ -106,6 +107,7 @@ class BucketSummary {
     }
   }
 
+  late final int everyday;
   late final int fixed;
   late final int fund;
   late final List<CategoryTotal> outside;

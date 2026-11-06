@@ -10,13 +10,14 @@ import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
 import '../budgets/budget_providers.dart';
-import '../budgets/budget_widgets.dart';
 import '../plan/balances_card.dart';
-import '../plan/plan_screen.dart';
 import '../stats.dart';
 import 'buckets_card.dart';
-import 'category_donut.dart';
 import 'hero_card.dart';
+import 'where_it_went.dart';
+import '../../data/db/database.dart' show Emi;
+import '../plan/plan_math.dart' show emiActive;
+import '../plan/plan_providers.dart' show emisProvider;
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -28,6 +29,11 @@ class DashboardScreen extends ConsumerWidget {
     final sync = ref.watch(smsSyncProvider);
     final review = ref.watch(reviewCountProvider).value ?? 0;
     final sortCount = ref.watch(toSortProvider).length;
+    final buckets = ref.watch(bucketSummaryProvider);
+    final emiMinor = [
+      for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
+        if (emiActive(e, month)) e.amountMinor,
+    ].fold(0, (a, b) => a + b);
 
     return Scaffold(
       body: SafeArea(
@@ -49,12 +55,22 @@ class DashboardScreen extends ConsumerWidget {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                       sliver: SliverList.list(
                         children: [
-                          HeroCard(stats: stats, month: month),
-                          const SizedBox(height: 12),
-                          BudgetCard(hasSpending: stats.spent > 0),
+                          MonthCard(
+                            month: month,
+                            inMinor: stats.income,
+                            outMinor: buckets == null
+                                ? 0
+                                : buckets.everyday +
+                                      buckets.fixed +
+                                      buckets.fund +
+                                      buckets.outsideTotal +
+                                      emiMinor +
+                                      buckets.invested +
+                                      buckets.lentOut -
+                                      buckets.lentIn,
+                            investedMinor: buckets?.invested ?? 0,
+                          ),
                           const BucketsCard(),
-                          const PlanLine(),
-                          const BalancesCard(),
                           if (sortCount > 0) ...[const SizedBox(height: 12), _SortBanner(count: sortCount)],
                           if (review > 0) ...[const SizedBox(height: 12), _ReviewBanner(count: review)],
                           if (stats.unconverted > 0) ...[
@@ -62,12 +78,10 @@ class DashboardScreen extends ConsumerWidget {
                             _ForeignBanner(count: stats.unconverted),
                           ],
                           if (!sync.enabled && list.isEmpty) ...[const SizedBox(height: 12), const _ConnectSmsCard()],
+                          const BalancesCard(),
                           const SizedBox(height: 20),
-                          if (stats.categories.isNotEmpty) ...[
-                            const SectionHeader('Where it went'),
-                            CategoryDonutCard(stats: stats),
-                            const SizedBox(height: 20),
-                          ],
+                          WhereItWent(txns: list),
+                          const SizedBox(height: 20),
                           SectionHeader(
                             'Recent',
                             action: list.isEmpty ? null : 'See all',

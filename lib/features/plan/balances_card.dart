@@ -7,7 +7,6 @@ import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/amount_field.dart';
 import '../../ui/widgets.dart';
-import '../settings/data_section.dart' show backUpNow;
 import 'balances.dart';
 
 /// The last year of balance snapshots.
@@ -39,9 +38,11 @@ class BalancesCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('Monthly net worth', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
             Text(
-              'Balances for ${DateFormat('MMMM').format(month)}',
-              style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              'Once a month, note what each account holds and what you owe, to see your net worth over time. '
+              'Shown until ${DateFormat('MMMM').format(month)}\'s is filled in.',
+              style: muted,
             ),
             if (history.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -58,20 +59,12 @@ class BalancesCard extends ConsumerWidget {
                 ),
             ],
             const SizedBox(height: 8),
-            Row(
-              children: [
-                // The theme's filled buttons are full width, so each side gets half.
-                Expanded(
-                  child: FilledButton.tonal(
-                    onPressed: () => showBalancesSheet(context, month, balanceLabels(snaps, month)),
-                    child: const Text('Fill in'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextButton(onPressed: () => backUpNow(context, ref), child: const Text('Back up now')),
-                ),
-              ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => showBalancesSheet(context, month, balanceLabels(snaps, month)),
+                child: Text('Fill in ${DateFormat('MMMM').format(month)}'),
+              ),
             ),
           ],
         ),

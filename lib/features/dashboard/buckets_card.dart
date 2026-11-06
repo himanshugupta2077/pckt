@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
-import '../budgets/budget_math.dart' show budgetWarnRatio;
+import '../budgets/budget_math.dart' show budgetWarnRatio, daysLeftIn;
 import '../budgets/budget_providers.dart';
 import '../budgets/in_budget.dart';
 import '../activity/transaction_sheet.dart';
@@ -33,15 +33,47 @@ class BucketsCard extends ConsumerWidget {
         if (emiActive(e, month)) e,
     ];
     final muted = context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant);
+    final everydayBudget = ref.watch(everydayBudgetProvider);
+    final now = DateTime.now();
+    final days = daysLeftIn(month, now);
+    final everydayLeft = everydayBudget - s.everyday;
+    final everydayNote = everydayLeft < 0
+        ? '${money(-everydayLeft)} over'
+        : days > 0 && month == monthStart(now)
+        ? '${money(everydayLeft ~/ days)}/day left for $days day${days == 1 ? '' : 's'}'
+        : null;
     final card = AppCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Buckets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text('Budgets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              Text(
+                '${money(everydayBudget + bucketBudgetMinor + fundBudget - s.everyday - s.fixed - s.fund)} left',
+                style: muted,
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
+          _Row(
+            bucketLabel(Bucket.everyday),
+            s.everyday,
+            budget: everydayBudget,
+            bucket: Bucket.everyday,
+            detail: everydayNote,
+          ),
           _Row(bucketLabel(Bucket.fixed), s.fixed, budget: bucketBudgetMinor, bucket: Bucket.fixed),
-          _Row('Fund', s.fund, budget: fundBudget, bucket: Bucket.fund),
+          _Row(bucketLabel(Bucket.fund), s.fund, budget: fundBudget, bucket: Bucket.fund),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1)),
+          Text('Not budgeted', style: context.text.labelLarge?.copyWith(color: context.colors.onSurfaceVariant)),
+          Text('Money that leaves your accounts but isn\'t day-to-day spending.', style: muted),
+          const SizedBox(height: 4),
           if (emis.isNotEmpty) _EmiRow(emis: emis),
           if (s.invested != 0) _Row('Invested', s.invested, bucket: Bucket.invest),
           if (s.lentIn + s.lentOut > 0)
@@ -51,19 +83,21 @@ class BucketsCard extends ConsumerWidget {
               bucket: Bucket.lending,
               detail: 'Out ${money(s.lentOut)} · in ${money(s.lentIn)}',
             ),
-          _Row('Outside', s.outsideTotal, bucket: Bucket.outside),
-          for (final c in s.outside)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, bottom: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(c.category?.name ?? 'Uncategorised', style: muted, overflow: TextOverflow.ellipsis),
-                  ),
-                  Text(money(c.amount), style: muted?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                ],
+          if (s.outsideTotal > 0) ...[
+            _Row('Outside', s.outsideTotal, bucket: Bucket.outside),
+            for (final c in s.outside)
+              Padding(
+                padding: const EdgeInsets.only(left: 12, bottom: 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(c.category?.name ?? 'Uncategorised', style: muted, overflow: TextOverflow.ellipsis),
+                    ),
+                    Text(money(c.amount), style: muted?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                  ],
+                ),
               ),
-            ),
+          ],
         ],
       ),
     );

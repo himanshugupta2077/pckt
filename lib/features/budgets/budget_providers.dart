@@ -37,6 +37,15 @@ final planProvider = StreamProvider<MonthlyPlan?>((ref) => ref.watch(databasePro
 /// When the bank SMS start, for averages over complete months.
 final dataStartProvider = StreamProvider<DateTime?>((ref) => ref.watch(databaseProvider).watchDataStart());
 
+/// The Everyday budget: the overall monthly budget (₹10,000 unless set
+/// otherwise in Budgets).
+final everydayBudgetProvider = Provider<int>((ref) {
+  final overall = (ref.watch(budgetsProvider).value ?? const <Budget>[]).where(
+    (b) => b.categoryId == null && b.active && b.currency == Currencies.home,
+  );
+  return overall.isEmpty ? bucketBudgetMinor : overall.first.amountMinor;
+});
+
 final bucketSummaryProvider = Provider<BucketSummary?>((ref) {
   final txns = ref.watch(monthTxnsProvider).value;
   if (txns == null) return null;
