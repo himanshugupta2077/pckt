@@ -226,7 +226,7 @@ class SmsAlertReceiver : BroadcastReceiver() {
                     )
                 )
             val choices = if (credit) listOf("income" to "Income", "lending" to "Lending", "transfer" to "Transfer")
-            else listOf("everyday" to "Everyday", "fixed" to "Fixed", "lending" to "Lending")
+            else listOf("everyday" to "Everyday", "fixed" to "Recurring", "lending" to "Lending")
             choices.forEachIndexed { i, (choice, label) ->
                 val answer = Intent(context, SortActionReceiver::class.java).apply {
                     action = "com.pckt.pckt.SORT.$choice"

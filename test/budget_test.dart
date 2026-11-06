@@ -150,7 +150,8 @@ void main() {
       };
       expect(inBucket(Bucket.fixed), {'Bills & Utilities', 'Mobile & Internet', 'Subscriptions', 'Fitness'});
       expect(inBucket(Bucket.fund), {'Big & occasional'});
-      expect(inBucket(Bucket.outside), {'Investments', 'Insurance', 'Loans & EMI', 'Transfers', 'Family'});
+      expect(inBucket(Bucket.outside), {'Insurance', 'Loans & EMI', 'Transfers', 'Family'});
+      expect(inBucket(Bucket.invest), {'Investments'});
       expect(cats.where((c) => c.name == 'Gym & supplements'), isEmpty);
       expect(await db.watchPlan().first, isNotNull, reason: 'a new install has its plan row');
     });
@@ -263,7 +264,7 @@ void main() {
       Bucket of(String name) => restored.firstWhere((c) => c.name == name).bucket;
       expect(
         [of('Investments'), of('Subscriptions'), of('Groceries'), of('Big & occasional')],
-        [Bucket.outside, Bucket.fixed, Bucket.everyday, Bucket.fund],
+        [Bucket.invest, Bucket.fixed, Bucket.everyday, Bucket.fund],
       );
       final txns = {for (final t in await fresh.select(fresh.transactions).get()) t.id: t.bucket};
       expect((txns[yes], txns[no]), (Bucket.everyday, Bucket.fixed));
@@ -373,7 +374,7 @@ void main() {
 
       db = AppDatabase(NativeDatabase(file));
       final after = await db.allCategories();
-      expect(after.firstWhere((c) => c.name == 'Investments').bucket, Bucket.outside);
+      expect(after.firstWhere((c) => c.name == 'Investments').bucket, Bucket.invest);
       expect(after.firstWhere((c) => c.name == 'Family').bucket, Bucket.outside);
       expect(after.firstWhere((c) => c.name == 'Food & Dining').bucket, Bucket.everyday);
       expect(after.map((c) => c.name).toSet().length, after.length, reason: 'no seed duplicated');

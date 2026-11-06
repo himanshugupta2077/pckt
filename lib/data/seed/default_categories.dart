@@ -276,7 +276,7 @@ const defaultCategories = <CategorySeed>[
     'Investments',
     'investments',
     2,
-    bucket: Bucket.outside,
+    bucket: Bucket.invest,
     keywords: [
       'indian clearing corp', // ICCL — mutual fund SIP NACH debits
       'iccl',

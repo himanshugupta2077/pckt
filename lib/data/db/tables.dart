@@ -19,10 +19,11 @@ enum AccountKind { bank, creditCard, wallet, cash }
 /// Where a debit belongs. Only [everyday] counts toward the monthly budget;
 /// [fixed] is bills and subscriptions, [fund] the big and occasional buys
 /// judged over the year, [outside] money that leaves but isn't spending
-/// (investments, loans, family). [lending] is money lent or borrowed and
-/// paid back, either way: neither spending nor income; the payment's note
-/// says what it was.
-enum Bucket { everyday, fixed, fund, outside, lending }
+/// (insurance, taxes, gifts). [lending] is money lent or borrowed and paid
+/// back, either way, and [invest] money put into or taken out of
+/// investments: neither is spending or income. [fixed] shows as
+/// "Recurring". New values go at the end: the index is what is stored.
+enum Bucket { everyday, fixed, fund, outside, lending, invest }
 
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();

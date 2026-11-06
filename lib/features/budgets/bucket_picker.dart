@@ -15,31 +15,19 @@ class BucketPicker extends StatelessWidget {
   final ValueChanged<Bucket>? onChanged;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: SegmentedButton<Bucket>(
-      segments: [
-        for (final b in Bucket.values)
-          ButtonSegment(
-            value: b,
-            label: Text(bucketLabel(b), maxLines: 1, overflow: TextOverflow.fade, softWrap: false),
-          ),
-      ],
-      selected: {?value},
-      emptySelectionAllowed: true,
-      showSelectedIcon: false,
-      // Five choices share a phone's width: a smaller label keeps "Everyday" whole.
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 2)),
-        textStyle: WidgetStatePropertyAll(context.text.labelMedium),
-      ),
-      onSelectionChanged: onChanged == null
-          ? null
-          : (s) {
-              if (s.isNotEmpty) onChanged!(s.first);
-            },
-    ),
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 4,
+    children: [
+      for (final b in bucketChoices)
+        ChoiceChip(
+          label: Text(bucketLabel(b)),
+          selected: value == b,
+          showCheckmark: false,
+          visualDensity: VisualDensity.compact,
+          onSelected: onChanged == null ? null : (_) => onChanged!(b),
+        ),
+    ],
   );
 }
 
@@ -55,7 +43,7 @@ class BucketMenu extends StatelessWidget {
     initialValue: value,
     tooltip: 'Bucket',
     onSelected: onChanged,
-    itemBuilder: (_) => [for (final b in Bucket.values) PopupMenuItem(value: b, child: Text(bucketLabel(b)))],
+    itemBuilder: (_) => [for (final b in bucketChoices) PopupMenuItem(value: b, child: Text(bucketLabel(b)))],
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Text(

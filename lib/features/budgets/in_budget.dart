@@ -33,16 +33,29 @@ const bucketBudgetMinor = 1000000;
 
 String bucketLabel(Bucket b) => switch (b) {
   Bucket.everyday => 'Everyday',
-  Bucket.fixed => 'Fixed',
+  Bucket.fixed => 'Recurring',
   Bucket.fund => 'Fund',
   Bucket.outside => 'Outside',
   Bucket.lending => 'Lending',
+  Bucket.invest => 'Invest',
 };
 
 /// Money lent or borrowed and paid back, to or from: neither spending nor
 /// income. Decided like a bucket (the payment's own choice, then the
 /// payee's, then the category's).
-bool isLending(TxnView v) => (v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket) == Bucket.lending;
+bool isLending(TxnView v) => bucketOf(v) == Bucket.lending;
+
+/// Money put into investments, or taken out (a broker paying back): not
+/// spending or income. Decided like [isLending].
+bool isInvest(TxnView v) => bucketOf(v) == Bucket.invest;
+
+/// The bucket chosen for a payment in either direction (the payment's own,
+/// the payee's, the category's), before transfers and money in are taken
+/// out by [budgetDecision].
+Bucket? bucketOf(TxnView v) => v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket;
+
+/// Order the bucket choices are shown in.
+const bucketChoices = [Bucket.everyday, Bucket.fixed, Bucket.fund, Bucket.invest, Bucket.lending, Bucket.outside];
 
 /// Money moved between the user's own accounts or cards (a card bill): the
 /// transfer flag, or the Transfers category, which means the same.

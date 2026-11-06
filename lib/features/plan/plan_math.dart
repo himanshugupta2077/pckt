@@ -15,7 +15,7 @@ class GoalPlan {
 
 /// The plan's outputs for [month] (normally this month).
 ///
-/// Planned left over = salary − EMI − Everyday budget − Fixed budget −
+/// Planned left over = salary − EMI − Everyday budget − Recurring budget −
 /// Family and Insurance average − fund − investing. Goals are not taken
 /// off: the Goals tab sets what they need against this.
 /// An EMI stops counting after its last month; a goal due this month or

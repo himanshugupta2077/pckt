@@ -88,11 +88,33 @@ class BucketSummary {
     fixed = totals[Bucket.fixed]!;
     fund = totals[Bucket.fund]!;
     outside = outsideByCategory(thisMonth);
+    for (final v in thisMonth) {
+      final amount = v.txn.homeMinor;
+      if (amount == null || isTransferLike(v)) continue;
+      final out = v.txn.direction == TxnDirection.debit;
+      switch (bucketOf(v)) {
+        case Bucket.invest:
+          invested += out ? amount : -amount;
+        case Bucket.lending:
+          if (out) {
+            lentOut += amount;
+          } else {
+            lentIn += amount;
+          }
+        default:
+      }
+    }
   }
 
   late final int fixed;
   late final int fund;
   late final List<CategoryTotal> outside;
+
+  /// Put into investments less what came back from them.
+  int invested = 0;
+
+  /// Lending money in (borrowed, or paid back to you) and out.
+  int lentIn = 0, lentOut = 0;
 
   int get outsideTotal => outside.fold(0, (s, c) => s + c.amount);
 }

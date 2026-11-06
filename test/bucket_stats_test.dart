@@ -71,4 +71,28 @@ void main() {
     expect(isLending(txn(500000, category: family, bucket: Bucket.outside)), isFalse); // a real gift, this once
     expect(isLending(txn(500000, merchant: 'Ravi', payee: Bucket.lending)), isTrue);
   });
+
+  test('Invest nets money put in against money taken out; neither is spending or income', () {
+    final invest = cat(7, 'Investments', bucket: Bucket.invest, seed: 'Investments');
+    final m = DateTime(2026, 10);
+    final txns = [
+      txn(4500000, at: DateTime(2026, 10, 6), category: invest),
+      txn(204742, at: DateTime(2026, 10, 17), category: invest, dir: TxnDirection.credit),
+      txn(
+        100000,
+        at: DateTime(2026, 10, 18),
+        category: cat(8, 'Family', bucket: Bucket.lending),
+      ),
+      txn(
+        150000,
+        at: DateTime(2026, 10, 19),
+        dir: TxnDirection.credit,
+        category: cat(8, 'Family', bucket: Bucket.lending),
+      ),
+    ];
+    final s = BucketSummary(txns: txns, month: m);
+    expect((s.invested, s.lentOut, s.lentIn), (4500000 - 204742, 100000, 150000));
+    final stats = MonthStats(txns, m);
+    expect((stats.income, stats.outside, stats.spent), (0, 0, 0));
+  });
 }

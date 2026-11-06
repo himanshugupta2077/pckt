@@ -16,9 +16,9 @@ import '../plan/plan_providers.dart' show emisProvider;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-/// Fixed and Fund against their monthly budget (₹10,000 each; Fund's is
-/// the plan's), and Outside, for the month. Everyday is the budget card
-/// above it.
+/// Recurring and Fund against their monthly budget (₹10,000 each; Fund's
+/// is the plan's), then EMIs, Invest, Lending and Outside, for the month.
+/// Everyday is the budget card above it.
 class BucketsCard extends ConsumerWidget {
   const BucketsCard({super.key});
 
@@ -40,9 +40,17 @@ class BucketsCard extends ConsumerWidget {
         children: [
           Text('Buckets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          _Row('Fixed', s.fixed, budget: bucketBudgetMinor, bucket: Bucket.fixed),
+          _Row(bucketLabel(Bucket.fixed), s.fixed, budget: bucketBudgetMinor, bucket: Bucket.fixed),
           _Row('Fund', s.fund, budget: fundBudget, bucket: Bucket.fund),
           if (emis.isNotEmpty) _EmiRow(emis: emis),
+          if (s.invested != 0) _Row('Invested', s.invested, bucket: Bucket.invest),
+          if (s.lentIn + s.lentOut > 0)
+            _Row(
+              'Lending',
+              s.lentOut,
+              bucket: Bucket.lending,
+              detail: 'Out ${money(s.lentOut)} · in ${money(s.lentIn)}',
+            ),
           _Row('Outside', s.outsideTotal, bucket: Bucket.outside),
           for (final c in s.outside)
             Padding(
@@ -64,7 +72,7 @@ class BucketsCard extends ConsumerWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row(this.label, this.minor, {this.budget, required this.bucket});
+  const _Row(this.label, this.minor, {this.budget, required this.bucket, this.detail});
 
   final String label;
   final int minor;
@@ -74,6 +82,9 @@ class _Row extends StatelessWidget {
 
   /// Tapping the row lists this bucket's payments for the month.
   final Bucket bucket;
+
+  /// A line under the row instead of the amount's usual meaning.
+  final String? detail;
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -106,6 +117,8 @@ class _Row extends StatelessWidget {
             ],
           ),
           if (budget != null) ...[const SizedBox(height: 6), _Bar(ratio: minor / budget!)],
+          if (detail != null)
+            Text(detail!, style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant)),
         ],
       ),
     ),
@@ -182,9 +195,15 @@ Future<void> _showBucket(BuildContext context, Bucket bucket, String label) => s
       builder: (context, ref, _) {
         final txns = [
           for (final v in ref.watch(monthTxnsProvider).value ?? const <TxnView>[])
-            if (budgetDecision(v).bucket == bucket) v,
+            if (bucket == Bucket.invest || bucket == Bucket.lending
+                ? !isTransferLike(v) && bucketOf(v) == bucket
+                : budgetDecision(v).bucket == bucket)
+              v,
         ];
-        final total = txns.fold(0, (s, v) => s + (v.txn.homeMinor ?? 0));
+        final total = txns.fold(
+          0,
+          (s, v) => s + (v.txn.direction == TxnDirection.credit ? -1 : 1) * (v.txn.homeMinor ?? 0),
+        );
         return ListView(
           controller: scroll,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
