@@ -10,23 +10,32 @@ void main() {
         home: Scaffold(
           body: MonthCard(
             month: DateTime(2026, 11),
-            everydayLeft: 618494,
-            fixedLeft: 655703,
-            fundLeft: -156600,
+            everydaySpent: 381506,
+            everydayLimit: 1000000,
+            fixedSpent: 344297,
+            fixedLimit: 1000000,
+            fundSpent: 1156600,
+            fundLimit: 1000000,
             inMinor: 14166667,
             outMinor: 10440569,
+            everydayNote: '₹206 a day for 24 days',
           ),
         ),
       ),
     );
 
-    expect(find.text('Left this month'), findsNothing);
-    expect(find.textContaining('Out includes'), findsNothing);
+    expect(find.text('Budgets'), findsOneWidget);
     expect(find.text('Everyday'), findsOneWidget);
     expect(find.text('Recurring'), findsOneWidget);
     expect(find.text('Fund'), findsOneWidget);
+    expect(find.textContaining('spent of'), findsNWidgets(3));
     expect(find.textContaining('left'), findsNWidgets(2));
     expect(find.textContaining('over'), findsOneWidget);
+    expect(find.text('₹206 a day for 24 days'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Budgets')).dy,
+      greaterThan(tester.getTopLeft(find.byIcon(PhosphorIconsBold.arrowDownLeft)).dy),
+    );
     expect(find.byIcon(PhosphorIconsBold.arrowDownLeft), findsOneWidget);
     expect(find.byIcon(PhosphorIconsBold.arrowUpRight), findsOneWidget);
 

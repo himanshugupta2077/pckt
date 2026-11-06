@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/theme/icons.dart';
-import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
-import '../budgets/budget_math.dart' show budgetWarnRatio, daysLeftIn;
 import '../budgets/budget_providers.dart';
 import '../budgets/in_budget.dart';
 import '../activity/transaction_sheet.dart';
@@ -17,8 +15,8 @@ import '../plan/plan_providers.dart' show emisProvider;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-/// Everyday, Recurring and Fund against their monthly budget (₹10,000
-/// each; Fund's is the plan's), then EMIs, Invest and Others.
+/// What is not in the three budgets: EMIs, money invested, and Others
+/// (lending and outside). The budgets themselves are on the month card.
 class BucketsCard extends ConsumerWidget {
   const BucketsCard({super.key});
 
@@ -26,43 +24,23 @@ class BucketsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(bucketSummaryProvider);
     if (s == null) return const SizedBox.shrink();
-    final fundBudget = ref.watch(planProvider).value?.fundMinor ?? bucketBudgetMinor;
     final month = ref.watch(selectedMonthProvider);
     final emis = [
       for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
         if (emiActive(e, month)) e,
     ];
-    final everydayBudget = ref.watch(everydayBudgetProvider);
-    final now = DateTime.now();
-    final days = daysLeftIn(month, now);
-    final everydayLeft = everydayBudget - s.everyday;
-    final everydayNote = everydayLeft < 0
-        ? '${money(-everydayLeft)} over'
-        : days > 0 && month == monthStart(now)
-        ? '${money(everydayLeft ~/ days)}/day left for $days day${days == 1 ? '' : 's'}'
-        : null;
+    final showOthers = s.lentIn + s.lentOut > 0 || s.outsideTotal > 0;
+    if (emis.isEmpty && s.invested == 0 && !showOthers) return const SizedBox.shrink();
     final card = AppCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Budgets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          _Row(
-            bucketLabel(Bucket.everyday),
-            s.everyday,
-            budget: everydayBudget,
-            bucket: Bucket.everyday,
-            detail: everydayNote,
-          ),
-          _Row(bucketLabel(Bucket.fixed), s.fixed, budget: bucketBudgetMinor, bucket: Bucket.fixed),
-          _Row(bucketLabel(Bucket.fund), s.fund, budget: fundBudget, bucket: Bucket.fund),
-          const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1)),
-          Text('Not budgeted', style: context.text.labelLarge?.copyWith(color: context.colors.onSurfaceVariant)),
+          Text('Not budgeted', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           if (emis.isNotEmpty) _EmiRow(emis: emis),
           if (s.invested != 0) _Row('Invested', s.invested, bucket: Bucket.invest),
-          if (s.lentIn + s.lentOut > 0 || s.outsideTotal > 0) const _OthersRow(),
+          if (showOthers) const _OthersRow(),
         ],
       ),
     );
@@ -71,53 +49,30 @@ class BucketsCard extends ConsumerWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row(this.label, this.minor, {this.budget, required this.bucket, this.detail});
+  const _Row(this.label, this.minor, {required this.bucket});
 
   final String label;
   final int minor;
 
-  /// Monthly budget: shown as "of ₹X" with a bar.
-  final int? budget;
-
   /// Tapping the row lists this bucket's payments for the month.
   final Bucket bucket;
 
-  /// A line under the row instead of the amount's usual meaning.
-  final String? detail;
-
   @override
   Widget build(BuildContext context) => InkWell(
-    onTap: () => _showBucket(context, bucket, label),
+    onTap: () => showBucketSheet(context, bucket, label),
     borderRadius: BorderRadius.circular(8),
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(child: Text(label, style: context.text.labelLarge)),
-              Text.rich(
-                TextSpan(
-                  text: money(minor),
-                  children: [
-                    if (budget != null)
-                      TextSpan(
-                        text: ' of ${money(budget!)}',
-                        style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
-                      ),
-                  ],
-                ),
-                style: context.text.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+          Expanded(child: Text(label, style: context.text.labelLarge)),
+          Text(
+            money(minor),
+            style: context.text.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
-          if (budget != null) ...[const SizedBox(height: 6), _Bar(ratio: minor / budget!)],
-          if (detail != null)
-            Text(detail!, style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant)),
         ],
       ),
     ),
@@ -221,22 +176,15 @@ Future<void> _showOthers(BuildContext context) => showModalBottomSheet(
           for (final v in txns)
             if (budgetDecision(v).bucket == Bucket.outside) v,
         ];
-        Widget section(String label, List<TxnView> rows) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        List<Widget> tiles(List<TxnView> rows) => [
+          if (rows.isEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 14, 8, 4),
-              child: Text(label, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Text('Nothing this month.', style: context.text.bodyMedium),
             ),
-            if (rows.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                child: Text('Nothing this month.', style: context.text.bodyMedium),
-              ),
-            for (final v in rows)
-              TransactionTile(view: v, showDate: true, onTap: () => showTransactionSheet(context, v.txn.id)),
-          ],
-        );
+          for (final v in rows)
+            TransactionTile(view: v, showDate: true, onTap: () => showTransactionSheet(context, v.txn.id)),
+        ];
         return ListView(
           controller: scroll,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
@@ -245,8 +193,8 @@ Future<void> _showOthers(BuildContext context) => showModalBottomSheet(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: Text('Others', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
             ),
-            section('Lending', lending),
-            section('Outside', outside),
+            _FoldSection(label: 'Lending', children: tiles(lending)),
+            _FoldSection(label: 'Outside', children: tiles(outside)),
           ],
         );
       },
@@ -254,8 +202,49 @@ Future<void> _showOthers(BuildContext context) => showModalBottomSheet(
   ),
 );
 
+/// Lending or Outside, closed until tapped.
+class _FoldSection extends StatefulWidget {
+  const _FoldSection({required this.label, required this.children});
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  State<_FoldSection> createState() => _FoldSectionState();
+}
+
+class _FoldSectionState extends State<_FoldSection> {
+  var _open = false;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      InkWell(
+        onTap: () => setState(() => _open = !_open),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(widget.label, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              Transform.rotate(
+                angle: _open ? 1.5708 : 0,
+                child: Icon(PhosphorIconsBold.caretRight, size: 16, color: context.colors.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+      if (_open) ...widget.children,
+    ],
+  );
+}
+
 /// The month's payments in [bucket], newest first.
-Future<void> _showBucket(BuildContext context, Bucket bucket, String label) => showModalBottomSheet(
+Future<void> showBucketSheet(BuildContext context, Bucket bucket, String label) => showModalBottomSheet(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
@@ -301,26 +290,4 @@ Future<void> _showBucket(BuildContext context, Bucket bucket, String label) => s
   ),
 );
 
-/// Spent against budget: green, amber from 80%, coral past it.
-class _Bar extends StatelessWidget {
-  const _Bar({required this.ratio});
-  final double ratio;
 
-  @override
-  Widget build(BuildContext context) {
-    final color = ratio > 1
-        ? Palette.coral
-        : ratio >= budgetWarnRatio
-        ? Palette.amber
-        : Palette.mint;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: LinearProgressIndicator(
-        value: ratio.clamp(0, 1).toDouble(),
-        minHeight: 6,
-        color: color,
-        backgroundColor: color.withValues(alpha: context.isDark ? 0.16 : 0.14),
-      ),
-    );
-  }
-}

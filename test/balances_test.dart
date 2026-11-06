@@ -100,10 +100,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.textContaining('Fill in '), findsOneWidget);
     expect(find.text('Monthly net worth'), findsOneWidget);
-    expect(find.text('Budgets'), findsOneWidget);
-    expect(find.text('Not budgeted'), findsOneWidget);
     expect(find.textContaining('day-to-day'), findsNothing);
-    expect(find.text('₹649 of ₹10,000', findRichText: true), findsOneWidget);
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
@@ -116,6 +113,44 @@ void main() {
     final saved = (await tester.runAsync(() => db.watchSnapshots(from: month).first))!;
     expect(saved, hasLength(5));
     expect(netWorthByMonth(saved).single, (month, 3000000));
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('Others opens Lending and Outside closed', (tester) async {
+    SharedPreferences.setMockInitialValues({PrefKeys.homeCurrency: 'INR'});
+    final prefs = (await tester.runAsync(SharedPreferences.getInstance))!;
+    final db = memoryDb();
+    final now = DateTime.now();
+    await tester.runAsync(() async {
+      final id = await db.addManual(
+        amountMinor: 100000,
+        direction: TxnDirection.debit,
+        at: DateTime(now.year, now.month, now.day, 10),
+        merchant: 'Mansi lend',
+      );
+      await db.setTxnBucket(id, Bucket.lending);
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db), prefsProvider.overrideWithValue(prefs)],
+        child: const MaterialApp(home: Scaffold(body: BucketsCard())),
+      ),
+    );
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    expect(find.text('Mansi lend'), findsNothing);
+    await tester.tap(find.text('Others'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lending'), findsOneWidget);
+    expect(find.text('Outside'), findsOneWidget);
+    expect(find.text('Mansi lend'), findsNothing);
+    await tester.tap(find.text('Lending'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mansi lend'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
