@@ -1094,6 +1094,14 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
     requiredDuringInsert: false,
   ).withConverter<Bucket?>($TransactionsTable.$converterbucketn);
   @override
+  late final GeneratedColumnWithTypeConverter<SpendKind?, int> spendKind = GeneratedColumn<int>(
+    'spend_kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  ).withConverter<SpendKind?>($TransactionsTable.$converterspendKindn);
+  @override
   List<GeneratedColumn> get $columns => [
     id,
     amountMinor,
@@ -1117,6 +1125,7 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
     createdAt,
     inBudget,
     bucket,
+    spendKind,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1239,6 +1248,9 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
       bucket: $TransactionsTable.$converterbucketn.fromSql(
         attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}bucket']),
       ),
+      spendKind: $TransactionsTable.$converterspendKindn.fromSql(
+        attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}spend_kind']),
+      ),
     );
   }
 
@@ -1258,6 +1270,12 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
   );
   static JsonTypeConverter2<Bucket, int, int> $converterbucket = const EnumIndexConverter<Bucket>(Bucket.values);
   static JsonTypeConverter2<Bucket?, int?, int?> $converterbucketn = JsonTypeConverter2.asNullable($converterbucket);
+  static JsonTypeConverter2<SpendKind, int, int> $converterspendKind = const EnumIndexConverter<SpendKind>(
+    SpendKind.values,
+  );
+  static JsonTypeConverter2<SpendKind?, int?, int?> $converterspendKindn = JsonTypeConverter2.asNullable(
+    $converterspendKind,
+  );
 }
 
 class Transaction extends DataClass implements Insertable<Transaction> {
@@ -1307,6 +1325,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// The user's bucket for this payment. Null = follow the payee rule,
   /// then the category.
   final Bucket? bucket;
+
+  /// Need or want for this payment. Null follows the payee, then the category.
+  final SpendKind? spendKind;
   const Transaction({
     required this.id,
     required this.amountMinor,
@@ -1330,6 +1351,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.createdAt,
     this.inBudget,
     this.bucket,
+    this.spendKind,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1386,6 +1408,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || bucket != null) {
       map['bucket'] = Variable<int>($TransactionsTable.$converterbucketn.toSql(bucket));
     }
+    if (!nullToAbsent || spendKind != null) {
+      map['spend_kind'] = Variable<int>($TransactionsTable.$converterspendKindn.toSql(spendKind));
+    }
     return map;
   }
 
@@ -1413,6 +1438,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       createdAt: Value(createdAt),
       inBudget: inBudget == null && nullToAbsent ? const Value.absent() : Value(inBudget),
       bucket: bucket == null && nullToAbsent ? const Value.absent() : Value(bucket),
+      spendKind: spendKind == null && nullToAbsent ? const Value.absent() : Value(spendKind),
     );
   }
 
@@ -1441,6 +1467,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       inBudget: serializer.fromJson<bool?>(json['inBudget']),
       bucket: $TransactionsTable.$converterbucketn.fromJson(serializer.fromJson<int?>(json['bucket'])),
+      spendKind: $TransactionsTable.$converterspendKindn.fromJson(serializer.fromJson<int?>(json['spendKind'])),
     );
   }
   @override
@@ -1469,6 +1496,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'inBudget': serializer.toJson<bool?>(inBudget),
       'bucket': serializer.toJson<int?>($TransactionsTable.$converterbucketn.toJson(bucket)),
+      'spendKind': serializer.toJson<int?>($TransactionsTable.$converterspendKindn.toJson(spendKind)),
     };
   }
 
@@ -1495,6 +1523,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     DateTime? createdAt,
     Value<bool?> inBudget = const Value.absent(),
     Value<Bucket?> bucket = const Value.absent(),
+    Value<SpendKind?> spendKind = const Value.absent(),
   }) => Transaction(
     id: id ?? this.id,
     amountMinor: amountMinor ?? this.amountMinor,
@@ -1518,6 +1547,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     createdAt: createdAt ?? this.createdAt,
     inBudget: inBudget.present ? inBudget.value : this.inBudget,
     bucket: bucket.present ? bucket.value : this.bucket,
+    spendKind: spendKind.present ? spendKind.value : this.spendKind,
   );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -1543,6 +1573,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       inBudget: data.inBudget.present ? data.inBudget.value : this.inBudget,
       bucket: data.bucket.present ? data.bucket.value : this.bucket,
+      spendKind: data.spendKind.present ? data.spendKind.value : this.spendKind,
     );
   }
 
@@ -1570,7 +1601,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('duplicateOfId: $duplicateOfId, ')
           ..write('createdAt: $createdAt, ')
           ..write('inBudget: $inBudget, ')
-          ..write('bucket: $bucket')
+          ..write('bucket: $bucket, ')
+          ..write('spendKind: $spendKind')
           ..write(')'))
         .toString();
   }
@@ -1599,6 +1631,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     createdAt,
     inBudget,
     bucket,
+    spendKind,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -1625,7 +1658,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.duplicateOfId == this.duplicateOfId &&
           other.createdAt == this.createdAt &&
           other.inBudget == this.inBudget &&
-          other.bucket == this.bucket);
+          other.bucket == this.bucket &&
+          other.spendKind == this.spendKind);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -1651,6 +1685,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<DateTime> createdAt;
   final Value<bool?> inBudget;
   final Value<Bucket?> bucket;
+  final Value<SpendKind?> spendKind;
   const TransactionsCompanion({
     this.id = const Value.absent(),
     this.amountMinor = const Value.absent(),
@@ -1674,6 +1709,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.createdAt = const Value.absent(),
     this.inBudget = const Value.absent(),
     this.bucket = const Value.absent(),
+    this.spendKind = const Value.absent(),
   });
   TransactionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1698,6 +1734,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.createdAt = const Value.absent(),
     this.inBudget = const Value.absent(),
     this.bucket = const Value.absent(),
+    this.spendKind = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        direction = Value(direction),
        occurredAt = Value(occurredAt),
@@ -1726,6 +1763,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<DateTime>? createdAt,
     Expression<bool>? inBudget,
     Expression<int>? bucket,
+    Expression<int>? spendKind,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1750,6 +1788,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (createdAt != null) 'created_at': createdAt,
       if (inBudget != null) 'in_budget': inBudget,
       if (bucket != null) 'bucket': bucket,
+      if (spendKind != null) 'spend_kind': spendKind,
     });
   }
 
@@ -1776,6 +1815,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<DateTime>? createdAt,
     Value<bool?>? inBudget,
     Value<Bucket?>? bucket,
+    Value<SpendKind?>? spendKind,
   }) {
     return TransactionsCompanion(
       id: id ?? this.id,
@@ -1800,6 +1840,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       createdAt: createdAt ?? this.createdAt,
       inBudget: inBudget ?? this.inBudget,
       bucket: bucket ?? this.bucket,
+      spendKind: spendKind ?? this.spendKind,
     );
   }
 
@@ -1872,6 +1913,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (bucket.present) {
       map['bucket'] = Variable<int>($TransactionsTable.$converterbucketn.toSql(bucket.value));
     }
+    if (spendKind.present) {
+      map['spend_kind'] = Variable<int>($TransactionsTable.$converterspendKindn.toSql(spendKind.value));
+    }
     return map;
   }
 
@@ -1899,7 +1943,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('duplicateOfId: $duplicateOfId, ')
           ..write('createdAt: $createdAt, ')
           ..write('inBudget: $inBudget, ')
-          ..write('bucket: $bucket')
+          ..write('bucket: $bucket, ')
+          ..write('spendKind: $spendKind')
           ..write(')'))
         .toString();
   }
@@ -2486,7 +2531,15 @@ class $MerchantRulesTable extends MerchantRules with TableInfo<$MerchantRulesTab
     requiredDuringInsert: false,
   ).withConverter<Bucket?>($MerchantRulesTable.$converterbucketn);
   @override
-  List<GeneratedColumn> get $columns => [id, pattern, categoryId, countsInBudget, bucket];
+  late final GeneratedColumnWithTypeConverter<SpendKind?, int> spendKind = GeneratedColumn<int>(
+    'spend_kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  ).withConverter<SpendKind?>($MerchantRulesTable.$converterspendKindn);
+  @override
+  List<GeneratedColumn> get $columns => [id, pattern, categoryId, countsInBudget, bucket, spendKind];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2529,6 +2582,9 @@ class $MerchantRulesTable extends MerchantRules with TableInfo<$MerchantRulesTab
       bucket: $MerchantRulesTable.$converterbucketn.fromSql(
         attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}bucket']),
       ),
+      spendKind: $MerchantRulesTable.$converterspendKindn.fromSql(
+        attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}spend_kind']),
+      ),
     );
   }
 
@@ -2539,6 +2595,12 @@ class $MerchantRulesTable extends MerchantRules with TableInfo<$MerchantRulesTab
 
   static JsonTypeConverter2<Bucket, int, int> $converterbucket = const EnumIndexConverter<Bucket>(Bucket.values);
   static JsonTypeConverter2<Bucket?, int?, int?> $converterbucketn = JsonTypeConverter2.asNullable($converterbucket);
+  static JsonTypeConverter2<SpendKind, int, int> $converterspendKind = const EnumIndexConverter<SpendKind>(
+    SpendKind.values,
+  );
+  static JsonTypeConverter2<SpendKind?, int?, int?> $converterspendKindn = JsonTypeConverter2.asNullable(
+    $converterspendKind,
+  );
 }
 
 class MerchantRule extends DataClass implements Insertable<MerchantRule> {
@@ -2550,7 +2612,17 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
   /// one-time migration.
   final bool? countsInBudget;
   final Bucket? bucket;
-  const MerchantRule({required this.id, required this.pattern, this.categoryId, this.countsInBudget, this.bucket});
+
+  /// Need or want for this payee. Null follows the category.
+  final SpendKind? spendKind;
+  const MerchantRule({
+    required this.id,
+    required this.pattern,
+    this.categoryId,
+    this.countsInBudget,
+    this.bucket,
+    this.spendKind,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -2565,6 +2637,9 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
     if (!nullToAbsent || bucket != null) {
       map['bucket'] = Variable<int>($MerchantRulesTable.$converterbucketn.toSql(bucket));
     }
+    if (!nullToAbsent || spendKind != null) {
+      map['spend_kind'] = Variable<int>($MerchantRulesTable.$converterspendKindn.toSql(spendKind));
+    }
     return map;
   }
 
@@ -2575,6 +2650,7 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
       categoryId: categoryId == null && nullToAbsent ? const Value.absent() : Value(categoryId),
       countsInBudget: countsInBudget == null && nullToAbsent ? const Value.absent() : Value(countsInBudget),
       bucket: bucket == null && nullToAbsent ? const Value.absent() : Value(bucket),
+      spendKind: spendKind == null && nullToAbsent ? const Value.absent() : Value(spendKind),
     );
   }
 
@@ -2586,6 +2662,7 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
       categoryId: serializer.fromJson<int?>(json['categoryId']),
       countsInBudget: serializer.fromJson<bool?>(json['countsInBudget']),
       bucket: $MerchantRulesTable.$converterbucketn.fromJson(serializer.fromJson<int?>(json['bucket'])),
+      spendKind: $MerchantRulesTable.$converterspendKindn.fromJson(serializer.fromJson<int?>(json['spendKind'])),
     );
   }
   @override
@@ -2597,6 +2674,7 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
       'categoryId': serializer.toJson<int?>(categoryId),
       'countsInBudget': serializer.toJson<bool?>(countsInBudget),
       'bucket': serializer.toJson<int?>($MerchantRulesTable.$converterbucketn.toJson(bucket)),
+      'spendKind': serializer.toJson<int?>($MerchantRulesTable.$converterspendKindn.toJson(spendKind)),
     };
   }
 
@@ -2606,12 +2684,14 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
     Value<int?> categoryId = const Value.absent(),
     Value<bool?> countsInBudget = const Value.absent(),
     Value<Bucket?> bucket = const Value.absent(),
+    Value<SpendKind?> spendKind = const Value.absent(),
   }) => MerchantRule(
     id: id ?? this.id,
     pattern: pattern ?? this.pattern,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
     countsInBudget: countsInBudget.present ? countsInBudget.value : this.countsInBudget,
     bucket: bucket.present ? bucket.value : this.bucket,
+    spendKind: spendKind.present ? spendKind.value : this.spendKind,
   );
   MerchantRule copyWithCompanion(MerchantRulesCompanion data) {
     return MerchantRule(
@@ -2620,6 +2700,7 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
       categoryId: data.categoryId.present ? data.categoryId.value : this.categoryId,
       countsInBudget: data.countsInBudget.present ? data.countsInBudget.value : this.countsInBudget,
       bucket: data.bucket.present ? data.bucket.value : this.bucket,
+      spendKind: data.spendKind.present ? data.spendKind.value : this.spendKind,
     );
   }
 
@@ -2630,13 +2711,14 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
           ..write('pattern: $pattern, ')
           ..write('categoryId: $categoryId, ')
           ..write('countsInBudget: $countsInBudget, ')
-          ..write('bucket: $bucket')
+          ..write('bucket: $bucket, ')
+          ..write('spendKind: $spendKind')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, pattern, categoryId, countsInBudget, bucket);
+  int get hashCode => Object.hash(id, pattern, categoryId, countsInBudget, bucket, spendKind);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2645,7 +2727,8 @@ class MerchantRule extends DataClass implements Insertable<MerchantRule> {
           other.pattern == this.pattern &&
           other.categoryId == this.categoryId &&
           other.countsInBudget == this.countsInBudget &&
-          other.bucket == this.bucket);
+          other.bucket == this.bucket &&
+          other.spendKind == this.spendKind);
 }
 
 class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
@@ -2654,12 +2737,14 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
   final Value<int?> categoryId;
   final Value<bool?> countsInBudget;
   final Value<Bucket?> bucket;
+  final Value<SpendKind?> spendKind;
   const MerchantRulesCompanion({
     this.id = const Value.absent(),
     this.pattern = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.countsInBudget = const Value.absent(),
     this.bucket = const Value.absent(),
+    this.spendKind = const Value.absent(),
   });
   MerchantRulesCompanion.insert({
     this.id = const Value.absent(),
@@ -2667,6 +2752,7 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
     this.categoryId = const Value.absent(),
     this.countsInBudget = const Value.absent(),
     this.bucket = const Value.absent(),
+    this.spendKind = const Value.absent(),
   }) : pattern = Value(pattern);
   static Insertable<MerchantRule> custom({
     Expression<int>? id,
@@ -2674,6 +2760,7 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
     Expression<int>? categoryId,
     Expression<bool>? countsInBudget,
     Expression<int>? bucket,
+    Expression<int>? spendKind,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2681,6 +2768,7 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
       if (categoryId != null) 'category_id': categoryId,
       if (countsInBudget != null) 'counts_in_budget': countsInBudget,
       if (bucket != null) 'bucket': bucket,
+      if (spendKind != null) 'spend_kind': spendKind,
     });
   }
 
@@ -2690,6 +2778,7 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
     Value<int?>? categoryId,
     Value<bool?>? countsInBudget,
     Value<Bucket?>? bucket,
+    Value<SpendKind?>? spendKind,
   }) {
     return MerchantRulesCompanion(
       id: id ?? this.id,
@@ -2697,6 +2786,7 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
       categoryId: categoryId ?? this.categoryId,
       countsInBudget: countsInBudget ?? this.countsInBudget,
       bucket: bucket ?? this.bucket,
+      spendKind: spendKind ?? this.spendKind,
     );
   }
 
@@ -2718,6 +2808,9 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
     if (bucket.present) {
       map['bucket'] = Variable<int>($MerchantRulesTable.$converterbucketn.toSql(bucket.value));
     }
+    if (spendKind.present) {
+      map['spend_kind'] = Variable<int>($MerchantRulesTable.$converterspendKindn.toSql(spendKind.value));
+    }
     return map;
   }
 
@@ -2728,7 +2821,8 @@ class MerchantRulesCompanion extends UpdateCompanion<MerchantRule> {
           ..write('pattern: $pattern, ')
           ..write('categoryId: $categoryId, ')
           ..write('countsInBudget: $countsInBudget, ')
-          ..write('bucket: $bucket')
+          ..write('bucket: $bucket, ')
+          ..write('spendKind: $spendKind')
           ..write(')'))
         .toString();
   }
@@ -4994,6 +5088,7 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion Functi
   Value<DateTime> createdAt,
   Value<bool?> inBudget,
   Value<Bucket?> bucket,
+  Value<SpendKind?> spendKind,
 });
 typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion Function({
   Value<int> id,
@@ -5018,6 +5113,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion Functi
   Value<DateTime> createdAt,
   Value<bool?> inBudget,
   Value<Bucket?> bucket,
+  Value<SpendKind?> spendKind,
 });
 
 final class $$TransactionsTableReferences extends BaseReferences<_$AppDatabase, $TransactionsTable, Transaction> {
@@ -5126,6 +5222,9 @@ class $$TransactionsTableFilterComposer extends Composer<_$AppDatabase, $Transac
 
   ColumnWithTypeConverterFilters<Bucket?, Bucket, int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => ColumnWithTypeConverterFilters(column));
+
+  ColumnWithTypeConverterFilters<SpendKind?, SpendKind, int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => ColumnWithTypeConverterFilters(column));
 
   $$CategoriesTableFilterComposer get categoryId {
     final $$CategoriesTableFilterComposer composer = $composerBuilder(
@@ -5249,6 +5348,9 @@ class $$TransactionsTableOrderingComposer extends Composer<_$AppDatabase, $Trans
   ColumnOrderings<int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => ColumnOrderings(column));
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -5344,6 +5446,9 @@ class $$TransactionsTableAnnotationComposer extends Composer<_$AppDatabase, $Tra
 
   GeneratedColumnWithTypeConverter<Bucket?, int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<SpendKind?, int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => column);
 
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
@@ -5447,6 +5552,7 @@ class $$TransactionsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool?> inBudget = const Value.absent(),
                 Value<Bucket?> bucket = const Value.absent(),
+                Value<SpendKind?> spendKind = const Value.absent(),
               }) => TransactionsCompanion(
                 id: id,
                 amountMinor: amountMinor,
@@ -5470,6 +5576,7 @@ class $$TransactionsTableTableManager
                 createdAt: createdAt,
                 inBudget: inBudget,
                 bucket: bucket,
+                spendKind: spendKind,
               ),
           createCompanionCallback:
               ({
@@ -5495,6 +5602,7 @@ class $$TransactionsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool?> inBudget = const Value.absent(),
                 Value<Bucket?> bucket = const Value.absent(),
+                Value<SpendKind?> spendKind = const Value.absent(),
               }) => TransactionsCompanion.insert(
                 id: id,
                 amountMinor: amountMinor,
@@ -5518,6 +5626,7 @@ class $$TransactionsTableTableManager
                 createdAt: createdAt,
                 inBudget: inBudget,
                 bucket: bucket,
+                spendKind: spendKind,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -5928,6 +6037,7 @@ typedef $$MerchantRulesTableCreateCompanionBuilder = MerchantRulesCompanion Func
   Value<int?> categoryId,
   Value<bool?> countsInBudget,
   Value<Bucket?> bucket,
+  Value<SpendKind?> spendKind,
 });
 typedef $$MerchantRulesTableUpdateCompanionBuilder = MerchantRulesCompanion Function({
   Value<int> id,
@@ -5935,6 +6045,7 @@ typedef $$MerchantRulesTableUpdateCompanionBuilder = MerchantRulesCompanion Func
   Value<int?> categoryId,
   Value<bool?> countsInBudget,
   Value<Bucket?> bucket,
+  Value<SpendKind?> spendKind,
 });
 
 final class $$MerchantRulesTableReferences extends BaseReferences<_$AppDatabase, $MerchantRulesTable, MerchantRule> {
@@ -5971,6 +6082,9 @@ class $$MerchantRulesTableFilterComposer extends Composer<_$AppDatabase, $Mercha
 
   ColumnWithTypeConverterFilters<Bucket?, Bucket, int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => ColumnWithTypeConverterFilters(column));
+
+  ColumnWithTypeConverterFilters<SpendKind?, SpendKind, int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => ColumnWithTypeConverterFilters(column));
 
   $$CategoriesTableFilterComposer get categoryId {
     final $$CategoriesTableFilterComposer composer = $composerBuilder(
@@ -6010,6 +6124,9 @@ class $$MerchantRulesTableOrderingComposer extends Composer<_$AppDatabase, $Merc
   ColumnOrderings<int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => ColumnOrderings(column));
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -6046,6 +6163,9 @@ class $$MerchantRulesTableAnnotationComposer extends Composer<_$AppDatabase, $Me
 
   GeneratedColumnWithTypeConverter<Bucket?, int> get bucket =>
       $composableBuilder(column: $table.bucket, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<SpendKind?, int> get spendKind =>
+      $composableBuilder(column: $table.spendKind, builder: (column) => column);
 
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
@@ -6096,12 +6216,14 @@ class $$MerchantRulesTableTableManager
                 Value<int?> categoryId = const Value.absent(),
                 Value<bool?> countsInBudget = const Value.absent(),
                 Value<Bucket?> bucket = const Value.absent(),
+                Value<SpendKind?> spendKind = const Value.absent(),
               }) => MerchantRulesCompanion(
                 id: id,
                 pattern: pattern,
                 categoryId: categoryId,
                 countsInBudget: countsInBudget,
                 bucket: bucket,
+                spendKind: spendKind,
               ),
           createCompanionCallback:
               ({
@@ -6110,12 +6232,14 @@ class $$MerchantRulesTableTableManager
                 Value<int?> categoryId = const Value.absent(),
                 Value<bool?> countsInBudget = const Value.absent(),
                 Value<Bucket?> bucket = const Value.absent(),
+                Value<SpendKind?> spendKind = const Value.absent(),
               }) => MerchantRulesCompanion.insert(
                 id: id,
                 pattern: pattern,
                 categoryId: categoryId,
                 countsInBudget: countsInBudget,
                 bucket: bucket,
+                spendKind: spendKind,
               ),
           withReferenceMapper: (p0) => p0
               .map(

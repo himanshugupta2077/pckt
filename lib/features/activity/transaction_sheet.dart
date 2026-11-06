@@ -12,6 +12,7 @@ import 'category_picker.dart';
 import 'conversion_sheet.dart';
 import '../budgets/bucket_picker.dart';
 import '../budgets/in_budget.dart';
+import '../dashboard/salary_split.dart';
 import '../settings/manage_widgets.dart' show accountLabel;
 import 'edit_transaction_sheet.dart';
 import 'payment_evidence.dart';
@@ -200,6 +201,7 @@ class TransactionSheet extends ConsumerWidget {
           secondary: const Icon(PhosphorIconsRegular.arrowsLeftRight),
         ),
         _BudgetSection(view: view),
+        _SpendSection(view: view),
         const SizedBox(height: 12),
         SectionHeader('Sources (${sources.length})'),
         for (final s in sources) _SourceCard(message: s),
@@ -304,6 +306,80 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
                 if (d.source == BudgetSource.payee && merchant != null) await db.setPayeeBucket(merchant, null);
               },
               child: Text(v.category == null ? 'Reset' : 'Reset to ${v.category!.name} default'),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Need or want. With a merchant it answers for the payee unless
+/// "Apply to all" is off. Hidden when the payment is not a spend.
+class _SpendSection extends ConsumerStatefulWidget {
+  const _SpendSection({required this.view});
+  final TxnView view;
+
+  @override
+  ConsumerState<_SpendSection> createState() => _SpendSectionState();
+}
+
+class _SpendSectionState extends ConsumerState<_SpendSection> {
+  var _applyAll = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.view;
+    final d = spendDecision(v);
+    if (!canSetSpendKind(v)) return const SizedBox.shrink();
+    final db = ref.read(databaseProvider);
+    final merchant = v.txn.merchant;
+    final own = d.source == SpendSource.manual || d.source == SpendSource.payee;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          leading: const Icon(PhosphorIconsRegular.chartPie),
+          title: const Text('Need or want'),
+          subtitle: Text(spendSourceLabel(v)),
+        ),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final k in SpendKind.values)
+              ChoiceChip(
+                label: Text(k == SpendKind.need ? 'Need' : 'Want'),
+                selected: d.kind == k,
+                showCheckmark: false,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) async {
+                  if (merchant != null && _applyAll) {
+                    await db.setPayeeSpendKind(merchant, k);
+                  } else {
+                    await db.setTxnSpendKind(v.txn.id, k);
+                  }
+                },
+              ),
+          ],
+        ),
+        if (merchant != null)
+          CheckboxListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            value: _applyAll,
+            onChanged: (on) => setState(() => _applyAll = on ?? true),
+            title: Text('Apply to all $merchant'),
+          ),
+        if (own)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: TextButton(
+              onPressed: () async {
+                await db.setTxnSpendKind(v.txn.id, null);
+                if (d.source == SpendSource.payee && merchant != null) await db.setPayeeSpendKind(merchant, null);
+              },
+              child: const Text('Reset'),
             ),
           ),
       ],

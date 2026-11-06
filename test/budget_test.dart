@@ -33,6 +33,8 @@ TxnView txn(
   String? merchant,
   Bucket? bucket,
   Bucket? payee,
+  SpendKind? spendKind,
+  SpendKind? payeeKind,
 }) => TxnView(
   Transaction(
     id: ++_id,
@@ -48,10 +50,13 @@ TxnView txn(
     categoryLocked: false,
     createdAt: DateTime(2026),
     bucket: bucket,
+    spendKind: spendKind,
   ),
   category,
   null,
-  payee == null ? null : MerchantRule(id: 1, pattern: merchant!.toLowerCase(), bucket: payee),
+  payee == null && payeeKind == null
+      ? null
+      : MerchantRule(id: 1, pattern: (merchant ?? '').toLowerCase(), bucket: payee, spendKind: payeeKind),
 );
 
 AppDatabase memoryDb() => AppDatabase(DatabaseConnection(NativeDatabase.memory()));
@@ -383,7 +388,7 @@ void main() {
       expect((await db.select(db.transactions).get()).single.bucket, isNull);
       await db.setPayeeBucket('Zepto', Bucket.everyday); // bucket-only rule needs the nullable category
       expect(await db.allMerchantRules(), hasLength(2));
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 7);
+      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 8);
       await db.close();
     } finally {
       await dir.delete(recursive: true);
@@ -497,7 +502,7 @@ void main() {
       expect(views[healthkart]!.source, BudgetSource.payee);
       expect(views[plain]!.bucket, Bucket.everyday);
       expect((await db.watchPlan().first)?.fundMinor, 1000000);
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 7);
+      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 8);
       await db.close();
     } finally {
       await dir.delete(recursive: true);

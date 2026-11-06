@@ -56,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -75,6 +75,11 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, categories, categories.bucket);
         await _addColumnIfMissing(m, transactions, transactions.bucket);
         await _addColumnIfMissing(m, merchantRules, merchantRules.bucket);
+      }
+      // Before the v5 merchant-rule rebuild, which copies every current column.
+      if (from < 8) {
+        await _addColumnIfMissing(m, transactions, transactions.spendKind);
+        await _addColumnIfMissing(m, merchantRules, merchantRules.spendKind);
       }
       if (from < 5) {
         await _addColumnIfMissing(m, categories, categories.countsInBudget);
@@ -497,6 +502,24 @@ class AppDatabase extends _$AppDatabase {
   /// category. Touches no other payment and no rule.
   Future<void> setTxnBucket(int id, Bucket? bucket) =>
       (update(transactions)..where((t) => t.id.equals(id))).write(TransactionsCompanion(bucket: Value(bucket)));
+
+  /// Need or want for one payment. Null goes back to the payee, then the category.
+  Future<void> setTxnSpendKind(int id, SpendKind? kind) =>
+      (update(transactions)..where((t) => t.id.equals(id))).write(TransactionsCompanion(spendKind: Value(kind)));
+
+  /// Need or want for every payment to [merchant]. Null removes the answer.
+  /// Payments that had their own answer follow the payee from now on.
+  Future<void> setPayeeSpendKind(String merchant, SpendKind? kind) => transaction(() async {
+    final pattern = merchant.toLowerCase();
+    if (pattern.isEmpty) return;
+    await into(merchantRules).insert(
+      MerchantRulesCompanion.insert(pattern: pattern, spendKind: Value(kind)),
+      onConflict: DoUpdate((_) => MerchantRulesCompanion(spendKind: Value(kind)), target: [merchantRules.pattern]),
+    );
+    await (update(
+      transactions,
+    )..where((t) => t.merchant.lower().equals(pattern))).write(const TransactionsCompanion(spendKind: Value(null)));
+  });
 
   /// The bucket for every payment to [merchant] (null removes the answer).
   /// Payments to it that had their own bucket follow the rule from now on,

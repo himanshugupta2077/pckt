@@ -17,6 +17,7 @@ import '../plan/balances_card.dart';
 import '../stats.dart';
 import 'buckets_card.dart';
 import 'hero_card.dart';
+import 'salary_card.dart';
 import 'where_it_went.dart';
 import '../../data/db/database.dart' show Emi;
 import '../plan/plan_math.dart' show emiActive;
@@ -64,6 +65,7 @@ class DashboardScreen extends ConsumerWidget {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                       sliver: SliverList.list(
                         children: [
+                          const SalaryCard(),
                           MonthCard(
                             month: month,
                             everydaySpent: everydaySpent,

@@ -76,6 +76,17 @@ months (the month the bank SMS start in counts only if they start in its first t
 The v5 yes/no columns stay in the schema unread; `migrateToBuckets` turns them into buckets once,
 on upgrade and when restoring an older backup.
 
+## Salary split
+
+The card above the budget card (`lib/features/dashboard/salary_split.dart`) shows this month's
+invested, needs and wants as a share of the plan salary. On the open month it says "so far":
+spends are month-to-date and the EMI line is the whole instalment. Invested is the invest bucket
+plus anything in the Investments category, net of money that came back. Needs are groceries, bills,
+rent, health, transport and the like, plus the plan's EMIs (a card EMI is not its own transaction).
+Wants are dining, shopping, travel and the like. Other, People and cash are "Not sorted", and
+family or other lending is "Lent". Neither is called unspent. Schema v8 stores a need/want
+override; a null answer keeps following the category.
+
 ## Currencies
 
 Amounts are stored as integers in each currency's minor unit (`lib/core/currency.dart`, decimals

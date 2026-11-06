@@ -27,6 +27,10 @@ enum AccountKind { bank, creditCard, wallet, cash }
 /// "Recurring". New values go at the end: the index is what is stored.
 enum Bucket { everyday, fixed, fund, outside, lending, invest }
 
+/// Need or want, for the salary card. Investment is [Bucket.invest], not a
+/// value here. New values go at the end: the index is what is stored.
+enum SpendKind { need, want }
+
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -112,6 +116,9 @@ class Transactions extends Table {
   /// The user's bucket for this payment. Null = follow the payee rule,
   /// then the category.
   IntColumn get bucket => intEnum<Bucket>().nullable()();
+
+  /// Need or want for this payment. Null follows the payee, then the category.
+  IntColumn get spendKind => intEnum<SpendKind>().nullable()();
 }
 
 /// Every SMS / email we have looked at, parsed or not. Keeping the raw
@@ -166,6 +173,9 @@ class MerchantRules extends Table {
   /// one-time migration.
   BoolColumn get countsInBudget => boolean().nullable()();
   IntColumn get bucket => intEnum<Bucket>().nullable()();
+
+  /// Need or want for this payee. Null follows the category.
+  IntColumn get spendKind => intEnum<SpendKind>().nullable()();
 }
 
 /// The monthly plan: one row. Amounts are home-currency minor units per
