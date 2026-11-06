@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pckt/data/db/database.dart';
 import 'package:pckt/features/budgets/bucket_stats.dart';
+import 'package:pckt/features/budgets/in_budget.dart';
+import 'package:pckt/features/stats.dart';
 
 import 'budget_test.dart' show cat, txn;
 
@@ -34,7 +36,7 @@ void main() {
     });
   });
 
-  test('the Buckets card: fixed, fund against plan, outside by category', () {
+  test('the Buckets card: fixed and fund this month, outside by category, loans in none', () {
     final txns = [
       txn(120000, at: DateTime(2026, 10, 3), category: bills),
       txn(850000, at: DateTime(2026, 10, 9), category: food, bucket: Bucket.fund), // before the plan
@@ -46,20 +48,27 @@ void main() {
       txn(1500000, at: DateTime(2026, 12, 7), category: family),
       txn(50000, at: DateTime(2026, 12, 7), category: food),
       txn(9999900, at: DateTime(2026, 12, 7), transfer: true),
+      txn(6400000, at: DateTime(2026, 12, 4), category: family, bucket: Bucket.loan), // paying back
+      txn(2000000, at: DateTime(2026, 12, 1), dir: TxnDirection.credit, category: family, bucket: Bucket.loan),
     ];
-    final s = BucketSummary(
-      txns: txns,
-      month: DateTime(2026, 12),
-      dataStart: DateTime(2026, 9, 1),
-      planStart: DateTime(2026, 11),
-      fundPerMonth: 1000000,
-    );
+    final s = BucketSummary(txns: txns, month: DateTime(2026, 12));
     expect(s.fixed, 80000);
-    expect((s.fixedAvg.minor, s.fixedAvg.months), (40000, 3));
-    expect((s.fund, s.fundSince, s.fundPlanned), (300000, 540000, 2000000));
+    expect(s.fund, 300000);
     expect([for (final c in s.outside) (c.category?.name, c.amount)], [('Loans & EMI', 4000000), ('Family', 2500000)]);
     expect(s.outsideTotal, 6500000);
     expect(monthsSince(DateTime(2026, 11), DateTime(2026, 10)), 0);
     expect(isFamilyOrInsurance(txns[6]), isTrue);
+    final stats = MonthStats([
+      for (final v in txns)
+        if (inMonth(v.txn.occurredAt, DateTime(2026, 12))) v,
+    ], DateTime(2026, 12));
+    expect((stats.income, stats.outside), (0, 6880000)); // the loan is neither
+  });
+
+  test('a payee or category marked Loan takes its payments out of spending and income', () {
+    final family = cat(9, 'Family', bucket: Bucket.loan, seed: 'Family');
+    expect(isLoan(txn(500000, category: family)), isTrue);
+    expect(isLoan(txn(500000, category: family, bucket: Bucket.outside)), isFalse); // a real gift, this once
+    expect(isLoan(txn(500000, merchant: 'Ravi', payee: Bucket.loan)), isTrue);
   });
 }

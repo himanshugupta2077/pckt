@@ -37,29 +37,10 @@ final planProvider = StreamProvider<MonthlyPlan?>((ref) => ref.watch(databasePro
 /// When the bank SMS start, for averages over complete months.
 final dataStartProvider = StreamProvider<DateTime?>((ref) => ref.watch(databaseProvider).watchDataStart());
 
-/// Transactions from 6 months before the selected month (or the plan's
-/// start, if earlier) to its end: enough for the Buckets card.
-final bucketTxnsProvider = StreamProvider<List<TxnView>>((ref) {
-  ref.watch(homeCurrencyProvider);
-  final m = ref.watch(selectedMonthProvider);
-  final start = ref.watch(planProvider).value?.startMonth;
-  var from = DateTime(m.year, m.month - 6);
-  if (start != null && start.isBefore(from)) from = start;
-  return ref.watch(databaseProvider).watchTxns(from: from, to: nextMonth(m));
-});
-
 final bucketSummaryProvider = Provider<BucketSummary?>((ref) {
-  final txns = ref.watch(bucketTxnsProvider).value;
-  final plan = ref.watch(planProvider).value;
-  final start = ref.watch(dataStartProvider);
-  if (txns == null || plan == null || !start.hasValue) return null;
-  return BucketSummary(
-    txns: txns,
-    month: ref.watch(selectedMonthProvider),
-    dataStart: start.value,
-    planStart: plan.startMonth,
-    fundPerMonth: plan.fundMinor,
-  );
+  final txns = ref.watch(monthTxnsProvider).value;
+  if (txns == null) return null;
+  return BucketSummary(txns: txns, month: ref.watch(selectedMonthProvider));
 });
 
 final notificationsProvider = Provider((ref) => LocalNotifications());

@@ -6,6 +6,7 @@ import '../../core/theme/icons.dart';
 import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
+import '../activity/payment_evidence.dart';
 import '../activity/transaction_sheet.dart';
 import 'bucket_picker.dart';
 import 'budget_providers.dart';
@@ -63,13 +64,15 @@ class _SortTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final v = item.latest;
     final n = item.txns.length;
+    final upi = v.txn.counterparty;
     final detail = [
       v.category?.name ?? 'Uncategorised',
       n == 1 ? dayLabel(v.txn.occurredAt) : '$n payments',
+      if (upi != null && upi.toLowerCase() != item.merchant?.toLowerCase()) upi,
     ].join('  ·  ');
     return AppCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      onTap: n == 1 ? () => showTransactionSheet(context, v.txn.id) : null,
+      onTap: () => n == 1 ? showTransactionSheet(context, v.txn.id) : _showPayments(context, item),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -87,7 +90,12 @@ class _SortTile extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                       style: context.text.titleMedium,
                     ),
-                    Text(detail, style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant)),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
+                    ),
                   ],
                 ),
               ),
@@ -107,3 +115,37 @@ class _SortTile extends ConsumerWidget {
     );
   }
 }
+
+/// Every payment to one payee, each with its message, to decide the bucket
+/// with the facts in view.
+Future<void> _showPayments(BuildContext context, SortItem item) => showModalBottomSheet(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  builder: (_) => DraggableScrollableSheet(
+    expand: false,
+    initialChildSize: 0.75,
+    maxChildSize: 0.95,
+    builder: (context, scroll) => ListView(
+      controller: scroll,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      children: [
+        Text(
+          '${item.merchant ?? txnTitle(item.latest.txn)}  ·  ${money(item.totalMinor)}',
+          style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${item.txns.length} payments. Tap one for the full details.',
+          style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        for (final v in item.txns)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: PaymentEvidence(view: v),
+          ),
+      ],
+    ),
+  ),
+);

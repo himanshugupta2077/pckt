@@ -192,7 +192,12 @@ class IngestionService {
         ? (txn.convertedMinor!, txn.convertedCurrency!)
         : null;
     final sourceKey = DedupEngine.sourceKey(source, sender);
-    final match = dedup.best(txn, sourceKey, await _candidates(txn, currency, converted));
+    final match = dedup.best(
+      txn,
+      sourceKey,
+      await _candidates(txn, currency, converted),
+      template: DedupEngine.template(body),
+    );
 
     if (match != null && match.score >= DedupEngine.autoMerge) {
       report.merged++;
@@ -252,19 +257,131 @@ class IngestionService {
       direction: t.direction,
       at: t.occurredAt,
     );
-    return [
-      for (final r in rows)
-        DedupCandidate(
-          id: r.id,
-          occurredAt: r.occurredAt,
-          reference: r.reference,
-          accountHint: r.accountHint,
-          merchant: r.merchant,
-          counterparty: r.counterparty,
-          sourceKeys: {for (final m in await db.sourcesOf(r.id)) DedupEngine.sourceKey(m.source, m.sender)},
-        ),
-    ];
+    return [for (final r in rows) await _candidate(r)];
   }
+
+  Future<DedupCandidate> _candidate(Transaction r) async {
+    final sources = await db.sourcesOf(r.id);
+    return DedupCandidate(
+      id: r.id,
+      occurredAt: r.occurredAt,
+      reference: r.reference,
+      accountHint: r.accountHint,
+      merchant: r.merchant,
+      counterparty: r.counterparty,
+      sourceKeys: {for (final m in sources) DedupEngine.sourceKey(m.source, m.sender)},
+      templates: {
+        for (final m in sources) '${DedupEngine.sourceKey(m.source, m.sender)}|${DedupEngine.template(m.body)}',
+      },
+    );
+  }
+
+  /// Bank footers ("Not you? To block / dispute / report, call…") that older
+  /// parsers read as the payee.
+  static final footerMerchant = RegExp(r'^(block|unblock|dispute|report|call)\b', caseSensitive: false);
+
+  /// One-time clean-up of payments since [from] after the parser fixes for
+  /// notices and bank footers. Re-reads every message behind each SMS or
+  /// email payment: if all of them are now ignored (a declined charge, a
+  /// pre-debit notice) the payment goes; a payee that was really a footer
+  /// gets the right name; a card-bill payment becomes a transfer. Payee
+  /// rules learned on footer names are dropped, then flagged duplicates are
+  /// re-scored. Manual entries are never touched. Returns a line per change.
+  Future<List<String>> repairSince(DateTime from) => db.transaction(() async {
+    final log = <String>[];
+    final txns = await (db.select(db.transactions)..where((t) => t.occurredAt.isBiggerOrEqualValue(from))).get();
+    for (final t in txns) {
+      final sources = await db.sourcesOf(t.id);
+      if (sources.isEmpty || sources.any((m) => m.source == SourceKind.manual || m.source == SourceKind.shortcut)) {
+        continue;
+      }
+      final results = [
+        for (final m in sources)
+          _parserFor(m.source).parse(
+            RawInput(
+              source: m.source,
+              externalId: m.externalId,
+              sender: m.sender,
+              body: m.body,
+              receivedAt: m.receivedAt,
+            ),
+          ),
+      ];
+      final label = '#${t.id} ${t.occurredAt.toIso8601String().substring(0, 10)} ${t.amountMinor / 100}';
+      if (results.every((r) => r is Ignored)) {
+        final reason = (results.first as Ignored).reason;
+        await db.dropNonPayment(t.id, reason);
+        log.add('drop $label ${t.merchant}: $reason');
+        continue;
+      }
+      final parsed = results.whereType<Parsed>().firstOrNull?.txn;
+      if (parsed == null) continue;
+      if (t.merchant != null && footerMerchant.hasMatch(t.merchant!) && parsed.merchant != t.merchant) {
+        await db.setParty(t.id, merchant: parsed.merchant, counterparty: parsed.counterparty ?? t.counterparty);
+        log.add('rename $label ${t.merchant} → ${parsed.merchant}');
+      }
+      if (parsed.transferHint && !t.isTransfer) {
+        await db.setTransfer(t.id, true);
+        log.add('transfer $label');
+      }
+    }
+    for (final r in await db.allMerchantRules()) {
+      if (!footerMerchant.hasMatch(r.pattern)) continue;
+      await (db.delete(db.merchantRules)..where((x) => x.id.equals(r.id))).go();
+      log.add('rule removed: ${r.pattern}');
+    }
+    log.addAll(await resolveDuplicates());
+    return log;
+  });
+
+  /// Re-scores every payment flagged as a possible duplicate with the
+  /// current [dedup] rules: a sure match is merged (keeping the payment
+  /// that says more), a clear non-match loses the flag, the rest stay for
+  /// the user. Returns a line per change.
+  Future<List<String>> resolveDuplicates() => db.transaction(() async {
+    final log = <String>[];
+    final flagged = await (db.select(db.transactions)..where((t) => t.duplicateOfId.isNotNull())).get();
+    for (final t in flagged) {
+      final other = await (db.select(db.transactions)..where((x) => x.id.equals(t.duplicateOfId!))).getSingleOrNull();
+      final sources = await db.sourcesOf(t.id);
+      if (other == null) {
+        await db.confirm(t.id);
+        continue;
+      }
+      if (sources.isEmpty) continue;
+      final m = sources.first;
+      final score = dedup.score(
+        ParsedTxn(
+          amountMinor: t.amountMinor,
+          direction: t.direction,
+          occurredAt: t.occurredAt,
+          mode: t.mode,
+          confidence: 1,
+          merchant: t.merchant,
+          counterparty: t.counterparty,
+          accountHint: t.accountHint,
+          reference: t.reference,
+        ),
+        DedupEngine.sourceKey(m.source, m.sender),
+        await _candidate(other),
+        template: DedupEngine.template(m.body),
+      );
+      if (score >= DedupEngine.autoMerge) {
+        final (from, into) = _richness(t) > _richness(other) ? (other.id, t.id) : (t.id, other.id);
+        await db.mergeInto(from, into);
+        log.add('merge #$from into #$into (${t.amountMinor / 100}, score ${score.toStringAsFixed(2)})');
+      } else if (score < DedupEngine.review) {
+        await db.confirm(t.id);
+        log.add('not a duplicate: #${t.id} (score ${score.toStringAsFixed(2)})');
+      }
+    }
+    return log;
+  });
+
+  /// How much a payment says on its own: a named merchant, a known
+  /// account, and a category or note the user gave it.
+  static int _richness(Transaction t) =>
+      (t.merchant != null ? 2 : 0) + (t.accountId != null ? 1 : 0) + (t.categoryLocked || t.note != null ? 3 : 0);
 
   /// Fill gaps on the existing transaction with whatever the new source knows.
   /// A merchant receipt email names the merchant better than a bank alert

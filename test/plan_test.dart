@@ -37,7 +37,7 @@ void main() {
       plan: plan(emiEnds: DateTime(2027, 2), goal1: 30000000, goal1Due: DateTime(2027, 11)),
       month: nov,
       everyday: 1500000,
-      fixedAvg: const MonthAverage(1300000, 2),
+      fixed: 1300000,
       familyAvg: const MonthAverage(500000, 2),
     );
     expect(o.goals.single.perMonth, 2500000); // ₹3L over 12 months
@@ -50,7 +50,7 @@ void main() {
       plan: plan(goal1: 5000000, goal1Due: nov, goal2: 600000, goal2Due: DateTime(2026, 9)),
       month: nov,
       everyday: null,
-      fixedAvg: const MonthAverage(0, 0),
+      fixed: 0,
       familyAvg: const MonthAverage(0, 0),
     );
     expect([for (final g in o.goals) (g.index, g.perMonth)], [(1, null), (2, null)]);
@@ -63,7 +63,7 @@ void main() {
       plan: plan(emiEnds: DateTime(2027, 2)),
       month: m,
       everyday: 0,
-      fixedAvg: const MonthAverage(0, 0),
+      fixed: 0,
       familyAvg: const MonthAverage(0, 0),
     );
     expect(at(DateTime(2027, 2)).emi, 4000000);

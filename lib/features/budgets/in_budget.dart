@@ -27,12 +27,22 @@ BudgetDecision budgetDecision(TxnView v) {
   return const BudgetDecision(Bucket.everyday, BudgetSource.fallback);
 }
 
+/// Monthly budget for each of Everyday, Fixed and Fund: ₹10,000, fixed in
+/// code rather than set in the app.
+const bucketBudgetMinor = 1000000;
+
 String bucketLabel(Bucket b) => switch (b) {
   Bucket.everyday => 'Everyday',
   Bucket.fixed => 'Fixed',
   Bucket.fund => 'Fund',
   Bucket.outside => 'Outside',
+  Bucket.loan => 'Loan',
 };
+
+/// Money lent or borrowed and paid back, in either direction: left out of
+/// spending and income alike. Decided like a bucket (the payment's own
+/// choice, then the payee's, then the category's).
+bool isLoan(TxnView v) => (v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket) == Bucket.loan;
 
 /// Short line for the transaction sheet.
 String budgetSourceLabel(TxnView v) {

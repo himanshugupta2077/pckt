@@ -14,6 +14,7 @@ import '../budgets/bucket_picker.dart';
 import '../budgets/in_budget.dart';
 import '../settings/manage_widgets.dart' show accountLabel;
 import 'edit_transaction_sheet.dart';
+import 'payment_evidence.dart';
 
 Future<void> showTransactionSheet(BuildContext context, int id) => showModalBottomSheet(
   context: context,
@@ -158,7 +159,7 @@ class TransactionSheet extends ConsumerWidget {
           ),
         if (t.duplicateOfId != null) ...[
           const SizedBox(height: 18),
-          _DuplicatePanel(id: id, otherId: t.duplicateOfId!),
+          _DuplicatePanel(view: view, otherId: t.duplicateOfId!),
         ] else if (t.status == TxnStatus.needsReview) ...[
           const SizedBox(height: 18),
           AppCard(
@@ -305,18 +306,21 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
   }
 }
 
+/// Both payments side by side, each with its own message, so the user
+/// can tell whether it is one payment reported twice.
 class _DuplicatePanel extends ConsumerWidget {
-  const _DuplicatePanel({required this.id, required this.otherId});
-  final int id;
+  const _DuplicatePanel({required this.view, required this.otherId});
+  final TxnView view;
   final int otherId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final other = ref.watch(txnProvider(otherId)).value;
     final db = ref.read(databaseProvider);
+    final id = view.txn.id;
     return AppCard(
       color: Palette.amber.withValues(alpha: 0.12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -327,12 +331,20 @@ class _DuplicatePanel extends ConsumerWidget {
               Text('Possible duplicate', style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Same amount, close in time. If both messages describe one payment, merge them; '
+            'if they are two payments, keep both.',
+            style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+          PaymentEvidence(view: view, label: 'This payment'),
           const SizedBox(height: 8),
           if (other == null)
             const Text('The matching transaction no longer exists.')
           else
-            TransactionTile(view: other, showDate: true),
-          const SizedBox(height: 8),
+            PaymentEvidence(view: other, label: 'Looks like'),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(

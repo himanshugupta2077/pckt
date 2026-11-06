@@ -15,7 +15,7 @@ class GoalPlan {
 
 /// The plan's outputs for [month] (normally this month).
 ///
-/// Planned left over = salary − EMI − Everyday budget − Fixed average −
+/// Planned left over = salary − EMI − Everyday budget − Fixed budget −
 /// Family and Insurance average − fund − investing − goals per month.
 /// The EMI stops counting after the month it ends; a goal due this month
 /// or earlier has no monthly amount.
@@ -24,7 +24,7 @@ class PlanOutcome {
     required MonthlyPlan plan,
     required DateTime month,
     required this.everyday,
-    required this.fixedAvg,
+    required this.fixed,
     required this.familyAvg,
   }) : salary = plan.salaryMinor,
        fund = plan.fundMinor,
@@ -46,7 +46,9 @@ class PlanOutcome {
 
   /// The overall monthly budget; null when none is set.
   final int? everyday;
-  final MonthAverage fixedAvg;
+
+  /// The Fixed bucket's monthly budget.
+  final int fixed;
   final MonthAverage familyAvg;
   final int fund;
   final int investing;
@@ -54,8 +56,7 @@ class PlanOutcome {
 
   int get goalsPerMonth => goals.fold(0, (s, g) => s + (g.perMonth ?? 0));
 
-  int get leftOver =>
-      salary - emi - (everyday ?? 0) - fixedAvg.minor - familyAvg.minor - fund - investing - goalsPerMonth;
+  int get leftOver => salary - emi - (everyday ?? 0) - fixed - familyAvg.minor - fund - investing - goalsPerMonth;
 
   /// The month after the EMI ends, while it is still being paid.
   DateTime? get emiFreedFrom => emi > 0 && emiEnds != null ? DateTime(emiEnds!.year, emiEnds!.month + 1) : null;

@@ -73,7 +73,7 @@ class _Outcome extends StatelessWidget {
           _Line('Salary', o.salary),
           if (o.emi > 0) _Line('EMI', -o.emi),
           o.everyday == null ? const _Note('Everyday', 'no budget set') : _Line('Everyday budget', -o.everyday!),
-          _Average('Fixed', o.fixedAvg.minor, o.fixedAvg.months),
+          _Line('Fixed budget', -o.fixed),
           _Average('Family and insurance', o.familyAvg.minor, o.familyAvg.months),
           _Line('Fund', -o.fund),
           if (o.investing > 0) _Line('Investing', -o.investing),

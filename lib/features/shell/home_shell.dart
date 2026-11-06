@@ -11,6 +11,8 @@ import '../../providers.dart';
 import '../activity/add_transaction_sheet.dart';
 import 'share_outcome.dart';
 import '../budgets/budget_providers.dart';
+import '../budgets/in_budget.dart' show bucketBudgetMinor;
+import '../../data/db/database.dart' show Bucket;
 import '../settings/server_backup.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -32,6 +34,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     _lifecycle = AppLifecycleListener(onResume: _sync);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _sync();
+      await _repairOnce();
       await ref.read(smsAlertsProvider.notifier).ensurePermission();
     });
   }
@@ -44,6 +47,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }),
     ref.read(emailSyncProvider.notifier).syncIfDue().then(_announce),
   ]);
+
+  /// Once, after the parser fixes of Nov 2026: a fresh server backup first
+  /// (no backup, no repair; it tries again next start), then the clean-up
+  /// since the data start, the ₹10,000 Everyday budget, and family
+  /// payments as loans paid back rather than spending.
+  Future<void> _repairOnce() async {
+    final prefs = ref.read(prefsProvider);
+    if (prefs.getBool(PrefKeys.repairedOct2026) ?? false) return;
+    if (!await ref.read(serverBackupProvider.notifier).backUpNow()) return;
+    final db = ref.read(databaseProvider);
+    final log = await ref.read(ingestionProvider).repairSince(db.shownFrom ?? DateTime(2026, 10));
+    await db.setBudget(amountMinor: bucketBudgetMinor);
+    for (final c in await db.allCategories()) {
+      if ((c.seedName ?? c.name) == 'Family') await db.updateCategory(c.id, bucket: Bucket.loan);
+    }
+    await prefs.setBool(PrefKeys.repairedOct2026, true);
+    debugPrint('Repair:\n${log.join('\n')}');
+  }
 
   void _announce(IngestReport? report) {
     if (!mounted || report == null || report.added + report.merged == 0) return;

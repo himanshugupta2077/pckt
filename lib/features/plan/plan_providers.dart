@@ -6,6 +6,7 @@ import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../budgets/bucket_stats.dart';
 import '../budgets/budget_providers.dart';
+import '../budgets/in_budget.dart' show bucketBudgetMinor;
 import 'plan_math.dart';
 
 /// The 6 months before this one, for the plan's averages.
@@ -28,7 +29,7 @@ final planOutcomeProvider = Provider<PlanOutcome?>((ref) {
     plan: plan,
     month: month,
     everyday: overall?.amountMinor,
-    fixedAvg: monthlyAverage(txns, months, isFixed),
+    fixed: bucketBudgetMinor,
     familyAvg: monthlyAverage(txns, months, isFamilyOrInsurance),
   );
 });

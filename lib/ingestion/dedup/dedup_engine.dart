@@ -12,6 +12,7 @@ class DedupCandidate {
     this.merchant,
     this.counterparty,
     this.sourceKeys = const {},
+    this.templates = const {},
   });
 
   final int id;
@@ -23,6 +24,10 @@ class DedupCandidate {
 
   /// `"<source>:<sender header>"` for every raw message already linked.
   final Set<String> sourceKeys;
+
+  /// `"<source key>|<template>"` ([DedupEngine.template]) for the same
+  /// messages, when their text is known.
+  final Set<String> templates;
 }
 
 class DedupMatch {
@@ -42,24 +47,29 @@ class DedupMatch {
 ///  * time proximity (emails can lag SMS by hours)
 ///  * merchant / counterparty similarity
 ///  * a bonus when SMS and email disagree on channel (cross-channel evidence)
-///  * a penalty when the *same* sender reports twice — banks don't duplicate
-///    their own alerts, so that is more likely two real payments (two ₹20 chais)
+///  * a bonus when another sender (a merchant's own receipt) reports it
+///    within minutes
+///  * a penalty when the *same* sender reports twice in the same wording —
+///    banks don't repeat their own alerts, so that is more likely two real
+///    payments (two ₹20 chais). A different wording from the same bank (a
+///    card "Spent" alert and a "Bill Paid!" confirmation) is no such sign.
 class DedupEngine {
   const DedupEngine();
 
   static const autoMerge = 0.75;
   static const review = 0.5;
 
-  DedupMatch? best(ParsedTxn txn, String sourceKey, Iterable<DedupCandidate> candidates) {
+  /// [template] is the new message's [DedupEngine.template], if known.
+  DedupMatch? best(ParsedTxn txn, String sourceKey, Iterable<DedupCandidate> candidates, {String? template}) {
     DedupMatch? top;
     for (final c in candidates) {
-      final s = score(txn, sourceKey, c);
+      final s = score(txn, sourceKey, c, template: template);
       if (top == null || s > top.score) top = DedupMatch(c, s);
     }
     return top;
   }
 
-  double score(ParsedTxn t, String sourceKey, DedupCandidate c) {
+  double score(ParsedTxn t, String sourceKey, DedupCandidate c, {String? template}) {
     if (t.reference != null && c.reference != null) {
       return _sameRef(t.reference!, c.reference!) ? 1.0 : 0.0;
     }
@@ -111,9 +121,27 @@ class DedupEngine {
       } else if (dt <= const Duration(hours: 3)) {
         s += 0.15;
       }
+    } else if (!merchantConflict &&
+        !accountConflict &&
+        c.sourceKeys.isNotEmpty &&
+        !c.sourceKeys.contains(sourceKey) &&
+        dt <= const Duration(minutes: 5)) {
+      // Another sender on the same channel within minutes: typically the
+      // merchant's own receipt ("Premium activated. Amount paid Rs.299")
+      // next to the bank's alert.
+      s += 0.2;
     }
 
-    if (c.sourceKeys.contains(sourceKey)) s -= 0.35;
+    final sameWording = template == null || c.templates.isEmpty || c.templates.contains('$sourceKey|$template');
+    if (c.sourceKeys.contains(sourceKey)) {
+      if (sameWording) {
+        s -= 0.35;
+      } else if (merchantConflict || dt > const Duration(minutes: 5)) {
+        // Two formats from one bank are one payment only when they land
+        // together and agree; otherwise the user decides.
+        s = s.clamp(0.0, autoMerge - 0.01);
+      }
+    }
 
     return s.clamp(0.0, 1.0);
   }
@@ -138,6 +166,11 @@ class DedupEngine {
   }
 
   static bool _sameAccount(String a, String b) => a.endsWith(b) || b.endsWith(a);
+
+  /// The first two words of a message ("spent rs", "bill paid", "dear
+  /// upi"): which of a sender's alert formats it is.
+  static String template(String body) =>
+      RegExp(r'[a-z]+').allMatches(body.toLowerCase()).take(2).map((m) => m.group(0)).join(' ');
 
   static String sourceKey(SourceKind source, String sender) =>
       '${source.name}:${sender.trim().toUpperCase().replaceAll(RegExp(r'^[A-Z]{2}-|-[SPTG]$'), '')}';

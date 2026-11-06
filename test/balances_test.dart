@@ -101,7 +101,7 @@ void main() {
     expect(find.text('Fill in'), findsOneWidget);
     expect(find.text('Back up now'), findsOneWidget);
     expect(find.text('Buckets'), findsOneWidget);
-    expect(find.text('₹649'), findsOneWidget);
+    expect(find.text('₹649 of ₹10,000', findRichText: true), findsOneWidget);
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();

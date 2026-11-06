@@ -48,6 +48,12 @@ class SmsParser implements MessageParser {
     r"loan of up ?to|lowest emi|congratulations|eligible for|t&c|hurry|discount)",
   );
   static final _balanceOnly = RegExp(r'(available balance|avl\.? bal|balance (in|of|is)|bal(ance)? enquiry)');
+
+  /// Notices that quote an amount without it moving: "is not debited ...
+  /// due to cbs rejection", "Rs.75 will be deducted on 02/11", "FD ... will
+  /// be liquidated". Ignored only when no debit/credit verb stands outside
+  /// the phrase, so a real debit that mentions them still counts.
+  static final _notice = RegExp(r'\b(not (been )?debited|rejection|will be deducted|will be liquidated)\b');
   static final _mandateSetup = RegExp(
     r'(mandate (is )?(created|registered|set ?up|successfully)|autopay (is )?(set ?up|registered|activated|enabled)|'
     r'e-?mandate (has been )?registered|si (has been )?registered)',
@@ -92,6 +98,12 @@ class SmsParser implements MessageParser {
   static final _debitParty = <RegExp>[
     RegExp(r';\s*([^.;\n]{2,40}?)\s+credited', caseSensitive: false), // ICICI: "...; SWIGGY credited."
     RegExp(r'\btrf to\s+(.{2,40}?)\s+(?:ref|refno|upi)', caseSensitive: false), // SBI
+    // Card spends: "spent Rs.X on <card> on <date> at SHOP." — before "to",
+    // which the "To dispute / to EMI" footers would feed.
+    RegExp(
+      r'\bspent\b.{0,70}?\bat\s+(.{2,40}?)(?=\s+(?:on|via|ref|using|txn|avl|for)\b|[,(\n]|\.(?=\s|$)|$)',
+      caseSensitive: false,
+    ),
     RegExp(
       r'\bto\b\s*:?\s*(?:vpa\s+)?(.{2,50}?)(?=\s+(?:on|via|ref|upi|using|from|for|dt|date|avl|txn|at|umrn)\b|[,(\n]|\.(?=\s|$)|$)',
       caseSensitive: false,
@@ -115,8 +127,11 @@ class SmsParser implements MessageParser {
     RegExp(r'\bat\s+(.{2,40}?)(?=\s+(?:on|via|ref|using|txn|avl|for)\b|[,(\n]|\.(?=\s|$)|$)', caseSensitive: false),
   ];
 
+  /// Also the "Not you? To block / dispute / report, call…" and "To convert
+  /// this txn to EMI" footers banks add, which the "to" pattern would
+  /// otherwise read as a payee.
   static final _partyNoise = RegExp(
-    r'^(your|you|a/?c|ac|acct|account|card|bank|the|self|xx|\*|rs|inr|₹)\b|'
+    r'^(your|you|a/?c|ac|acct|account|card|bank|the|self|xx|\*|rs|inr|₹|block|unblock|dispute|report|call|convert)\b|'
     r'\b(a/?c|acct|account|bank card|credit card|debit card)\b|^\d+$|^[x*\d\s]+$',
     caseSensitive: false,
   );
@@ -137,6 +152,9 @@ class SmsParser implements MessageParser {
 
     if (_failed.hasMatch(lower)) return const Ignored('Failed / declined');
     if (_future.hasMatch(lower)) return const Ignored('Reminder / scheduled');
+    if (_notice.hasMatch(lower) && !_strongVerb(lower.replaceAll(_notice, ' '))) {
+      return const Ignored('Notice, no money moved');
+    }
     if (_request.hasMatch(lower)) return const Ignored('Payment request');
     if (_mandateSetup.hasMatch(lower)) return const Ignored('Mandate setup');
     if (_statement.hasMatch(lower) && !_strongVerb(lower)) return const Ignored('Statement / bill');
@@ -348,6 +366,6 @@ class SmsParser implements MessageParser {
       RegExp(r'\b(to self|self transfer|own account|between your accounts)\b').hasMatch(l) ||
       RegExp(
         r'(payment (of .{0,25})?(has been )?received (on|towards|for|in) your .{0,25}card|'
-        r'credit card (bill )?payment|towards your card)',
+        r'credit card (bill )?payment|credit card bill|towards your card|payment of .{0,25}credited to your card)',
       ).hasMatch(l);
 }

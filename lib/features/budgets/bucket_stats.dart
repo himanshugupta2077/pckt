@@ -79,42 +79,20 @@ int monthsSince(DateTime start, DateTime month) {
 
 bool inMonth(DateTime at, DateTime month) => at.year == month.year && at.month == month.month;
 
-/// What the Home Buckets card shows for [month].
+/// What the Home Buckets card shows for [month]: Fixed and Fund against
+/// their monthly budget ([bucketBudgetMinor]), Outside by category.
 class BucketSummary {
-  BucketSummary({
-    required List<TxnView> txns,
-    required DateTime month,
-    required DateTime? dataStart,
-    required DateTime planStart,
-    required int fundPerMonth,
-  }) : fundStart = planStart {
+  BucketSummary({required List<TxnView> txns, required DateTime month}) {
     final thisMonth = txns.where((v) => inMonth(v.txn.occurredAt, month)).toList();
     final totals = bucketTotals(thisMonth);
     fixed = totals[Bucket.fixed]!;
     fund = totals[Bucket.fund]!;
     outside = outsideByCategory(thisMonth);
-    fixedAvg = monthlyAverage(txns, completeMonths(month, dataStart), isFixed);
-    final months = monthsSince(planStart, month);
-    fundPlanned = fundPerMonth * months;
-    fundSince = months == 0
-        ? 0
-        : bucketTotals(
-            txns.where((v) => !v.txn.occurredAt.isBefore(planStart) && v.txn.occurredAt.isBefore(_next(month))),
-          )[Bucket.fund]!;
   }
 
-  final DateTime fundStart;
   late final int fixed;
-  late final MonthAverage fixedAvg;
   late final int fund;
-
-  /// Fund spending from the plan's start month to the end of this month,
-  /// against [fundPlanned] (fund per month × months).
-  late final int fundSince;
-  late final int fundPlanned;
   late final List<CategoryTotal> outside;
 
   int get outsideTotal => outside.fold(0, (s, c) => s + c.amount);
-
-  static DateTime _next(DateTime m) => DateTime(m.year, m.month + 1);
 }

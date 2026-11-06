@@ -2,21 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
+import '../budgets/budget_math.dart' show budgetWarnRatio;
 import '../budgets/budget_providers.dart';
+import '../budgets/in_budget.dart';
 
-/// Fixed, Fund and Outside for the month, under the hero (which is
-/// Everyday). The fund is shown as spent against the plan, never as money
-/// left to spend.
+/// Fixed and Fund against their monthly budget (₹10,000 each; Fund's is
+/// the plan's), and Outside, for the month. Everyday is the budget card
+/// above it.
 class BucketsCard extends ConsumerWidget {
   const BucketsCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(bucketSummaryProvider);
-    if (s == null || (s.fixed == 0 && s.fund == 0 && s.fundSince == 0 && s.outside.isEmpty)) {
-      return const SizedBox.shrink();
-    }
+    if (s == null) return const SizedBox.shrink();
+    final fundBudget = ref.watch(planProvider).value?.fundMinor ?? bucketBudgetMinor;
     final muted = context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant);
     final card = AppCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
@@ -25,18 +27,8 @@ class BucketsCard extends ConsumerWidget {
         children: [
           Text('Buckets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          _Row(
-            'Fixed',
-            s.fixed,
-            detail: s.fixedAvg.months == 0 ? null : '${s.fixedAvg.label}: ${money(s.fixedAvg.minor)}',
-          ),
-          _Row(
-            'Fund',
-            s.fund,
-            detail: s.fundPlanned == 0
-                ? null
-                : '${money(s.fundSince)} spent of ${money(s.fundPlanned)} planned since ${monthShort(s.fundStart)}',
-          ),
+          _Row('Fixed', s.fixed, budget: bucketBudgetMinor),
+          _Row('Fund', s.fund, budget: fundBudget),
           _Row('Outside', s.outsideTotal),
           for (final c in s.outside)
             Padding(
@@ -58,11 +50,13 @@ class BucketsCard extends ConsumerWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row(this.label, this.minor, {this.detail});
+  const _Row(this.label, this.minor, {this.budget});
 
   final String label;
   final int minor;
-  final String? detail;
+
+  /// Monthly budget: shown as "of ₹X" with a bar.
+  final int? budget;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -73,8 +67,17 @@ class _Row extends StatelessWidget {
         Row(
           children: [
             Expanded(child: Text(label, style: context.text.labelLarge)),
-            Text(
-              money(minor),
+            Text.rich(
+              TextSpan(
+                text: money(minor),
+                children: [
+                  if (budget != null)
+                    TextSpan(
+                      text: ' of ${money(budget!)}',
+                      style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
+                    ),
+                ],
+              ),
               style: context.text.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -82,9 +85,32 @@ class _Row extends StatelessWidget {
             ),
           ],
         ),
-        if (detail != null)
-          Text(detail!, style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant)),
+        if (budget != null) ...[const SizedBox(height: 6), _Bar(ratio: minor / budget!)],
       ],
     ),
   );
+}
+
+/// Spent against budget: green, amber from 80%, coral past it.
+class _Bar extends StatelessWidget {
+  const _Bar({required this.ratio});
+  final double ratio;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ratio > 1
+        ? Palette.coral
+        : ratio >= budgetWarnRatio
+        ? Palette.amber
+        : Palette.mint;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: LinearProgressIndicator(
+        value: ratio.clamp(0, 1).toDouble(),
+        minHeight: 6,
+        color: color,
+        backgroundColor: color.withValues(alpha: context.isDark ? 0.16 : 0.14),
+      ),
+    );
+  }
 }

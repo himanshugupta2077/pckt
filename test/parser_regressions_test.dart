@@ -214,4 +214,85 @@ void main() {
       );
     });
   });
+
+  group('notices and bank footers', () {
+    ParseResult parse(String sender, String body) => const SmsParser().parse(
+      RawInput(source: SourceKind.sms, externalId: '1', sender: sender, body: body, receivedAt: DateTime(2026, 10, 6)),
+    );
+
+    test('"not debited" is not a payment', () {
+      expect(
+        parse(
+          'AX-ICICIT-S',
+          'Your account is not debited with Rs 59.00 towards Google Play for GOOGLE due to cbs rejection 0116, RRN 123456789012-ICICI Bank.',
+        ),
+        isA<Ignored>(),
+      );
+    });
+
+    test('a real debit that mentions a notice phrase still counts', () {
+      final t = ok('AD-HDFCBK-S', 'Rs.500.00 debited from A/c XX1111 to SHOP. Charges will be deducted separately.');
+      expect(t.amountMinor, 50000);
+    });
+
+    test('FD sweep and pre-debit notices are not payments', () {
+      expect(
+        parse(
+          'AD-HDFCBK-S',
+          'FD XX1111 of INR 5,000.00 will be liquidated for INR 128.00 for sweep in debit from A/c XX2222. Add money to your HDFC Bank A/c to avoid liquidation.',
+        ),
+        isA<Ignored>(),
+      );
+      expect(
+        parse(
+          'JX-HDFCBK-S',
+          'E-Mandate!\nRs.75.00 will be deducted on 02/11/26, 00:00:00\nFor APPLE MEDIA SERVICES mandate\nUMN 0000test0000@okhdfcbank\nMaintain Balance\n-HDFC Bank',
+        ),
+        isA<Ignored>(),
+      );
+    });
+
+    test('"To Block and Reissue" footer is not the merchant', () {
+      final t = ok(
+        'AD-HDFCBK-S',
+        'Amount Spent: Rs.649 with HDFC Bank Credit Card 1234 at NETFLIX on 2026-10-14:22:06:24 This transaction was completed without any additional authentication factor mandated by RBI. Not You? To Block and Reissue, please call 18002586161 or SMS BLOCK CC 1234 to 7308080808',
+      );
+      expect(t.merchant, 'Netflix');
+      expect(t.amountMinor, 64900);
+    });
+
+    test('"To dispute" footer is not the merchant', () {
+      final t = ok(
+        'BP-ICICIT-S',
+        'Rs 1,250.00 spent on ICICI Bank Card XX1234 on 01-Nov-26 at 1449 DSI DEHRAD. Avl Lmt: Rs 50,000.00. To dispute, call 18002662/SMS BLOCK 1234 to 9215676766. To convert this txn to EMI give a missed call on 9999999999.',
+      );
+      expect(t.merchant, '1449 Dsi Dehrad');
+      expect(t.amountMinor, 125000);
+    });
+
+    test('"to report" footer is not the merchant', () {
+      final t = ok(
+        'AD-HDFCBK-S',
+        'HDFC Bank:Rs. 500.00 debited from a/c *1111 on 01/09/26 to a/c **2222 (UPI Ref No. 100000000001). Not you? Call on 18002586161 to report',
+      );
+      expect(t.merchant, isNull);
+    });
+
+    test('card bill payments are transfers', () {
+      expect(
+        ok(
+          'VM-HDFCBK-S',
+          'HDFC Bank Cardmember, Payment of Rs 6083 was credited to your card ending 1234 on 01/NOV/2026.',
+        ).transferHint,
+        isTrue,
+      );
+      expect(
+        ok(
+          'AD-HDFCBK-S',
+          'Bill Paid! ICICI Credit Card Bill 9999999999 of Rs. 577.07 paid on 01-Oct-2026 from HDFC Bank Account XXXXXXXXXX1111. BillPay Ref: HGAMP0000TEST00001',
+        ).transferHint,
+        isTrue,
+      );
+    });
+  });
 }

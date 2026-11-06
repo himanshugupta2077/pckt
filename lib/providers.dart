@@ -18,7 +18,7 @@ import 'ingestion/sms/sms_source.dart';
 final prefsProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError('overridden in main'));
 
 final databaseProvider = Provider<AppDatabase>((ref) {
-  final db = AppDatabase();
+  final db = AppDatabase()..shownFrom = DateTime(2026, 10);
   ref.onDispose(db.close);
   return db;
 });
@@ -47,6 +47,7 @@ abstract final class PrefKeys {
   static const smsLastSync = 'sms.lastSyncMillis';
   static const smsImportFrom = 'sms.importFromMillis';
   static const smsParserVersion = 'sms.parserVersion';
+  static const repairedOct2026 = 'repair.oct2026';
 
   /// Real-time SMS transaction notifications. Read natively by
   /// SmsAlertReceiver.kt as `flutter.sms.alerts` — keep the name in sync.

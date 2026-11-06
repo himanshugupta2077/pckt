@@ -13,9 +13,15 @@ import 'recurring_detector.dart';
 final recurringProvider = StreamProvider<List<RecurringPayment>>((ref) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
+  // A year back, before the app's Oct 2026 start too: subscriptions show
+  // up only after a few repeats.
   return ref
       .watch(databaseProvider)
-      .watchTxns(from: DateTime(today.year - 1, today.month, today.day), to: today.add(const Duration(days: 1)))
+      .watchTxns(
+        from: DateTime(today.year - 1, today.month, today.day),
+        to: today.add(const Duration(days: 1)),
+        allTime: true,
+      )
       .map((txns) => detectRecurring(txns, today: today));
 });
 

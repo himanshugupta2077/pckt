@@ -44,6 +44,14 @@ class AppDatabase extends _$AppDatabase {
   /// (migrating a plaintext one first) — see [openAppDatabase].
   AppDatabase([QueryExecutor? executor]) : super(executor ?? openAppDatabase());
 
+  /// Payments before this are kept but not shown, counted or asked about
+  /// (the app was set up in Oct 2026 and older months were never sorted).
+  /// Null shows everything.
+  DateTime? shownFrom;
+
+  DateTime? _from(DateTime? from) =>
+      shownFrom == null || (from != null && !from.isBefore(shownFrom!)) ? from : shownFrom;
+
   /// Seed categories every transaction can fall back to; never deletable.
   static const protectedCategories = {'Transfers', 'Other'};
 
@@ -241,8 +249,10 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Transactions in [from, to), newest first, joined with category/account.
-  Stream<List<TxnView>> watchTxns({DateTime? from, DateTime? to, int? limit}) {
+  /// Nothing before [shownFrom] unless [allTime].
+  Stream<List<TxnView>> watchTxns({DateTime? from, DateTime? to, int? limit, bool allTime = false}) {
     final q = select(transactions).join(_viewJoins);
+    if (!allTime) from = _from(from);
     if (from != null) q.where(transactions.occurredAt.isBiggerOrEqualValue(from));
     if (to != null) q.where(transactions.occurredAt.isSmallerThanValue(to));
     q.orderBy([OrderingTerm.desc(transactions.occurredAt), OrderingTerm.desc(transactions.id)]);
@@ -277,6 +287,7 @@ class AppDatabase extends _$AppDatabase {
     final q = selectOnly(transactions)
       ..addColumns([c])
       ..where(transactions.status.equalsValue(TxnStatus.needsReview));
+    if (shownFrom != null) q.where(transactions.occurredAt.isBiggerOrEqualValue(shownFrom!));
     return q.watchSingle().map((r) => r.read(c) ?? 0);
   }
 
@@ -338,11 +349,14 @@ class AppDatabase extends _$AppDatabase {
   Stream<MonthlyPlan?> watchPlan() => (select(plan)..limit(1)).watchSingleOrNull();
 
   /// When the data starts: the earliest bank SMS, or the earliest message
-  /// of any kind for an install without SMS.
+  /// of any kind for an install without SMS; never before [shownFrom].
   Stream<DateTime?> watchDataStart() {
     final first = rawMessages.receivedAt.min();
     final sms = rawMessages.receivedAt.min(filter: rawMessages.source.equalsValue(SourceKind.sms));
-    return (selectOnly(rawMessages)..addColumns([first, sms])).watchSingle().map((r) => r.read(sms) ?? r.read(first));
+    return (selectOnly(rawMessages)..addColumns([first, sms])).watchSingle().map((r) {
+      final start = r.read(sms) ?? r.read(first);
+      return start == null ? null : _from(start);
+    });
   }
 
   /// Snapshots from [from] on, oldest first.
@@ -381,18 +395,73 @@ class AppDatabase extends _$AppDatabase {
         ignoreReason: Value('Deleted by user'),
       ),
     );
-    await (delete(transactions)..where((t) => t.id.equals(id))).go();
+    await _forget(id);
   });
 
-  /// User confirmed [fromId] is the same payment as [intoId].
+  /// Deletes payment [id] and clears "possible duplicate of" links to it.
+  Future<void> _forget(int id) async {
+    await (update(transactions)..where((t) => t.duplicateOfId.equals(id))).write(
+      const TransactionsCompanion(duplicateOfId: Value(null), status: Value(TxnStatus.confirmed)),
+    );
+    await (delete(transactions)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// Payment [id] turned out not to be one (a notice, a declined charge):
+  /// it goes, and its messages are kept as ignored with [reason] so they
+  /// aren't imported again.
+  Future<void> dropNonPayment(int id, String reason) => transaction(() async {
+    await (update(rawMessages)..where((m) => m.transactionId.equals(id))).write(
+      RawMessagesCompanion(
+        transactionId: const Value(null),
+        parseStatus: const Value(ParseStatus.ignored),
+        ignoreReason: Value(reason),
+      ),
+    );
+    await _forget(id);
+  });
+
+  /// Sets the merchant and counterparty of one payment, nothing else.
+  Future<void> setParty(int id, {required String? merchant, required String? counterparty}) =>
+      (update(transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(merchant: Value(merchant), counterparty: Value(counterparty)),
+      );
+
+  /// [fromId] is the same payment as [intoId]: its messages move over, and
+  /// what [intoId] lacks (reference, merchant, account, the user's
+  /// category, bucket or note) is taken from it before it goes.
   Future<void> mergeInto(int fromId, int intoId) => transaction(() async {
+    final from = await (select(transactions)..where((t) => t.id.equals(fromId))).getSingle();
+    final into = await (select(transactions)..where((t) => t.id.equals(intoId))).getSingle();
     await (update(rawMessages)..where((m) => m.transactionId.equals(fromId))).write(
       RawMessagesCompanion(transactionId: Value(intoId), parseStatus: const Value(ParseStatus.merged)),
     );
     await (delete(transactions)..where((t) => t.id.equals(fromId))).go();
+    Value<T> fill<T>(T? mine, T? theirs) => mine == null && theirs != null ? Value(theirs) : const Value.absent();
+    final takeCategory = from.categoryLocked && !into.categoryLocked;
+    // A bucket rule for the kept payment's payee is the user's word on it.
+    final payee = (into.merchant ?? from.merchant)?.toLowerCase();
+    final rule = payee == null
+        ? null
+        : await (select(merchantRules)..where((r) => r.pattern.equals(payee))).getSingleOrNull();
+    await (update(transactions)..where((t) => t.id.equals(intoId))).write(
+      TransactionsCompanion(
+        status: const Value(TxnStatus.confirmed),
+        duplicateOfId: const Value(null),
+        reference: fill(into.reference, from.reference),
+        merchant: fill(into.merchant, from.merchant),
+        counterparty: fill(into.counterparty, from.counterparty),
+        accountId: fill(into.accountId, from.accountId),
+        accountHint: fill(into.accountHint, from.accountHint),
+        note: fill(into.note, from.note),
+        bucket: rule?.bucket != null ? const Value.absent() : fill(into.bucket, from.bucket),
+        categoryId: takeCategory ? Value(from.categoryId) : fill(into.categoryId, from.categoryId),
+        categoryLocked: takeCategory ? const Value(true) : const Value.absent(),
+      ),
+    );
+    // Anything that pointed at the removed payment now points at the kept one.
     await (update(
       transactions,
-    )..where((t) => t.id.equals(intoId))).write(const TransactionsCompanion(status: Value(TxnStatus.confirmed)));
+    )..where((t) => t.duplicateOfId.equals(fromId))).write(TransactionsCompanion(duplicateOfId: Value(intoId)));
   });
 
   Future<void> confirm(int id) => (update(transactions)..where((t) => t.id.equals(id))).write(

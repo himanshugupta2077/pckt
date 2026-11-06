@@ -92,10 +92,11 @@ class ServerBackupController extends Notifier<ServerBackupState> {
     await backUpNow();
   }
 
-  /// [force] replaces a server backup that has more data.
-  Future<void> backUpNow({bool force = false}) async {
+  /// [force] replaces a server backup that has more data. True once the
+  /// server has saved it.
+  Future<bool> backUpNow({bool force = false}) async {
     final uri = serverBackupUri(state.address);
-    if (state.running || uri == null) return;
+    if (state.running || uri == null) return false;
     state = _copy(running: true);
     final prefs = ref.read(prefsProvider);
     final now = DateTime.now();
@@ -127,6 +128,7 @@ class ServerBackupController extends Notifier<ServerBackupState> {
       lastError: result.message,
       serverHasMore: more,
     );
+    return ok;
   }
 }
 
