@@ -37,7 +37,7 @@ extension TxnMoney on Transaction {
 }
 
 @DriftDatabase(
-  tables: [Accounts, Categories, Transactions, RawMessages, MerchantRules, Budgets, Plan, BalanceSnapshots],
+  tables: [Accounts, Categories, Transactions, RawMessages, MerchantRules, Budgets, Plan, BalanceSnapshots, Emis],
 )
 class AppDatabase extends _$AppDatabase {
   /// Without an [executor], opens the SQLCipher-encrypted `pckt.sqlite`
@@ -56,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -112,6 +112,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(balanceSnapshots);
         await migrateToBuckets();
         await ensurePlan();
+      }
+      // v7: a list of EMIs instead of the plan's one EMI.
+      if (from < 7) {
+        await m.createTable(emis);
+        await seedEmisFromPlan();
       }
     },
     beforeOpen: (details) async {
@@ -204,6 +209,25 @@ class AppDatabase extends _$AppDatabase {
       updates: {merchantRules},
     );
   });
+
+  /// Turns the plan's single EMI (before v7) into the first row of the EMI
+  /// list, once: on upgrade and after restoring an older backup. The plan's
+  /// columns stay, unread.
+  Future<void> seedEmisFromPlan() async {
+    if (await (select(emis)..limit(1)).getSingleOrNull() != null) return;
+    final p = await (select(plan)..limit(1)).getSingleOrNull();
+    if (p == null || p.emiMinor <= 0) return;
+    await into(emis).insert(EmisCompanion.insert(name: 'EMI', amountMinor: p.emiMinor, lastMonth: Value(p.emiEnds)));
+  }
+
+  Stream<List<Emi>> watchEmis() => (select(emis)..orderBy([(e) => OrderingTerm(expression: e.id)])).watch();
+
+  Future<void> saveEmi({int? id, required String name, required int amountMinor, required DateTime? lastMonth}) {
+    final row = EmisCompanion(name: Value(name), amountMinor: Value(amountMinor), lastMonth: Value(lastMonth));
+    return id == null ? into(emis).insert(row) : (update(emis)..where((e) => e.id.equals(id))).write(row);
+  }
+
+  Future<void> deleteEmi(int id) => (delete(emis)..where((e) => e.id.equals(id))).go();
 
   /// Creates the plan row, starting this month, if there is none.
   Future<void> ensurePlan() async {
@@ -372,6 +396,7 @@ class AppDatabase extends _$AppDatabase {
     await (update(transactions)..where((t) => t.id.equals(txnId))).write(
       TransactionsCompanion(categoryId: Value(categoryId), categoryLocked: const Value(true)),
     );
+    await _reviewed(txnId);
     if (learnPattern != null && learnPattern.isNotEmpty && categoryId != null) {
       await into(merchantRules).insert(
         MerchantRulesCompanion.insert(pattern: learnPattern, categoryId: Value(categoryId)),
@@ -551,8 +576,14 @@ class AppDatabase extends _$AppDatabase {
 
   // ------------------------------------------------------------- editing
 
-  /// Edits the user-facing fields of a transaction. Source evidence
-  /// (raw messages, reference, counterparty) is left untouched.
+  /// A low-confidence payment the user has just corrected needs no "Looks
+  /// right" on top. A possible duplicate still waits for its own answer.
+  Future<void> _reviewed(int id) => (update(transactions)..where((t) => t.id.equals(id) & t.duplicateOfId.isNull()))
+      .write(const TransactionsCompanion(status: Value(TxnStatus.confirmed)));
+
+  /// Edits the user-facing fields of a transaction and counts as reviewing
+  /// it. Source evidence (raw messages, reference, counterparty) is left
+  /// untouched.
   Future<void> updateTxn(
     int id, {
     required int amountMinor,
@@ -565,20 +596,23 @@ class AppDatabase extends _$AppDatabase {
     required int? accountId,
     required String? note,
     Value<int?> categoryId = const Value.absent(),
-  }) => (update(transactions)..where((t) => t.id.equals(id))).write(
-    TransactionsCompanion(
-      amountMinor: Value(amountMinor),
-      currency: currency,
-      convertedMinor: convertedMinor,
-      convertedCurrency: convertedCurrency,
-      direction: Value(direction),
-      occurredAt: Value(occurredAt),
-      merchant: Value(merchant),
-      accountId: Value(accountId),
-      note: Value(note),
-      categoryId: categoryId,
-    ),
-  );
+  }) => transaction(() async {
+    await (update(transactions)..where((t) => t.id.equals(id))).write(
+      TransactionsCompanion(
+        amountMinor: Value(amountMinor),
+        currency: currency,
+        convertedMinor: convertedMinor,
+        convertedCurrency: convertedCurrency,
+        direction: Value(direction),
+        occurredAt: Value(occurredAt),
+        merchant: Value(merchant),
+        accountId: Value(accountId),
+        note: Value(note),
+        categoryId: categoryId,
+      ),
+    );
+    await _reviewed(id);
+  });
 
   /// Records what a foreign transaction came to in [currency] (normally
   /// the home currency), or clears it with a null [minor].

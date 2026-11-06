@@ -164,6 +164,7 @@ class DataExport {
         }
       }
       if (summary.schemaVersion < 6) await db.migrateToBuckets();
+      if (summary.schemaVersion < 7) await db.seedEmisFromPlan();
       await db.ensurePlan();
     });
     return summary;

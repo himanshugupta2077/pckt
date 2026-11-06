@@ -35,6 +35,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _sync();
       await _repairOnce();
+      await _mergeCardBillsOnce();
       await ref.read(smsAlertsProvider.notifier).ensurePermission();
     });
   }
@@ -60,10 +61,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final log = await ref.read(ingestionProvider).repairSince(db.shownFrom ?? DateTime(2026, 10));
     await db.setBudget(amountMinor: bucketBudgetMinor);
     for (final c in await db.allCategories()) {
-      if ((c.seedName ?? c.name) == 'Family') await db.updateCategory(c.id, bucket: Bucket.loan);
+      if ((c.seedName ?? c.name) == 'Family') await db.updateCategory(c.id, bucket: Bucket.ignore);
     }
     await prefs.setBool(PrefKeys.repairedOct2026, true);
     debugPrint('Repair:\n${log.join('\n')}');
+  }
+
+  /// Once, after card bills became one transfer: a fresh server backup
+  /// first, then each bill's messages since the data start joined into one,
+  /// and own-account transfers moved to Ignore (not spending, not income).
+  Future<void> _mergeCardBillsOnce() async {
+    final prefs = ref.read(prefsProvider);
+    if (prefs.getBool(PrefKeys.mergedCardBills) ?? false) return;
+    if (!await ref.read(serverBackupProvider.notifier).backUpNow()) return;
+    final db = ref.read(databaseProvider);
+    final log = await ref.read(ingestionProvider).mergeCardBills(db.shownFrom ?? DateTime(2026, 10));
+    for (final c in await db.allCategories()) {
+      if ((c.seedName ?? c.name) == 'Transfers') await db.updateCategory(c.id, bucket: Bucket.ignore);
+    }
+    await prefs.setBool(PrefKeys.mergedCardBills, true);
+    debugPrint('Card bills:\n${log.join('\n')}');
   }
 
   void _announce(IngestReport? report) {
@@ -132,9 +149,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             label: 'Insights',
           ),
           const NavigationDestination(
-            icon: Icon(PhosphorIconsRegular.sparkle),
-            selectedIcon: Icon(PhosphorIconsFill.sparkle),
-            label: 'Ask',
+            icon: Icon(PhosphorIconsRegular.target),
+            selectedIcon: Icon(PhosphorIconsFill.target),
+            label: 'Goals',
           ),
           const NavigationDestination(
             icon: Icon(PhosphorIconsRegular.gearSix),

@@ -35,6 +35,7 @@ class ParsedTxn {
     this.institution,
     this.isPersonToPerson = false,
     this.transferHint = false,
+    this.cardBill = false,
   });
 
   /// In minor units of [currency].
@@ -64,6 +65,11 @@ class ParsedTxn {
   /// Message itself suggests a movement between own accounts
   /// (credit-card bill payment, "to self", etc.).
   final bool transferHint;
+
+  /// A credit-card bill being paid: the bank's debit, the card's "payment
+  /// received", BBPS / CRED. The messages for one bill become one
+  /// transfer, whichever side they come from.
+  final bool cardBill;
 
   @override
   String toString() =>

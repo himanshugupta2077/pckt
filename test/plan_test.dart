@@ -29,26 +29,32 @@ MonthlyPlan plan({
   goal2Due: goal2Due,
 );
 
+Emi emi(int amount, DateTime? last, [String name = 'Laptop']) =>
+    Emi(id: amount, name: name, amountMinor: amount, lastMonth: last);
+
 void main() {
   final nov = DateTime(2026, 11);
+  final laptop = emi(4000000, DateTime(2027, 2));
 
-  test('left over subtracts EMI, budget, averages, fund, investing and goals', () {
+  test('left over subtracts EMI, budgets, family average, fund and investing, not goals', () {
     final o = PlanOutcome(
-      plan: plan(emiEnds: DateTime(2027, 2), goal1: 30000000, goal1Due: DateTime(2027, 11)),
+      plan: plan(goal1: 30000000, goal1Due: DateTime(2027, 11)),
       month: nov,
+      emis: [laptop],
       everyday: 1500000,
       fixed: 1300000,
       familyAvg: const MonthAverage(500000, 2),
     );
     expect(o.goals.single.perMonth, 2500000); // ₹3L over 12 months
-    expect(o.leftOver, 14200000 - 4000000 - 1500000 - 1300000 - 500000 - 1000000 - 1000000 - 2500000);
-    expect(o.emiFreedFrom, DateTime(2027, 3));
+    expect(o.leftOver, 14200000 - 4000000 - 1500000 - 1300000 - 500000 - 1000000 - 1000000);
+    expect(o.emiFreed, [(DateTime(2027, 3), 4000000)]);
   });
 
   test('a goal due this month or earlier is "due now", not divided', () {
     final o = PlanOutcome(
       plan: plan(goal1: 5000000, goal1Due: nov, goal2: 600000, goal2Due: DateTime(2026, 9)),
       month: nov,
+      emis: [laptop],
       everyday: null,
       fixed: 0,
       familyAvg: const MonthAverage(0, 0),
@@ -58,17 +64,20 @@ void main() {
     expect(o.leftOver, 14200000 - 4000000 - 1000000 - 1000000);
   });
 
-  test('the EMI stops counting after the month it ends', () {
+  test('each EMI stops counting after its last month; one without a last month keeps counting', () {
     PlanOutcome at(DateTime m) => PlanOutcome(
-      plan: plan(emiEnds: DateTime(2027, 2)),
+      plan: plan(),
       month: m,
+      emis: [laptop, emi(540000, DateTime(2026, 12), 'Phone'), emi(100000, null, 'Card')],
       everyday: 0,
       fixed: 0,
       familyAvg: const MonthAverage(0, 0),
     );
-    expect(at(DateTime(2027, 2)).emi, 4000000);
-    expect(at(DateTime(2027, 3)).emi, 0);
-    expect(at(DateTime(2027, 3)).emiFreedFrom, isNull);
+    expect(at(nov).emi, 4000000 + 540000 + 100000);
+    expect(at(DateTime(2027, 2)).emi, 4000000 + 100000);
+    expect(at(DateTime(2027, 3)).emi, 100000);
+    expect(at(DateTime(2027, 3)).emiFreed, isEmpty);
+    expect(at(nov).emiFreed, [(DateTime(2027, 3), 4000000), (DateTime(2027, 1), 540000)]);
   });
 
   test('averages come from complete months only, Family and Insurance from Outside', () {

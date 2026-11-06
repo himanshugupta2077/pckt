@@ -19,9 +19,10 @@ enum AccountKind { bank, creditCard, wallet, cash }
 /// Where a debit belongs. Only [everyday] counts toward the monthly budget;
 /// [fixed] is bills and subscriptions, [fund] the big and occasional buys
 /// judged over the year, [outside] money that leaves but isn't spending
-/// (investments, loans, family). [loan] is money lent to or borrowed from
-/// people and paid back: neither spending nor income.
-enum Bucket { everyday, fixed, fund, outside, loan }
+/// (investments, loans, family). [ignore] is money that is neither
+/// spending nor income, such as a loan from family paid back; the payment's
+/// note says why.
+enum Bucket { everyday, fixed, fund, outside, ignore }
 
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -195,6 +196,21 @@ class Plan extends Table {
   DateTimeColumn get goal2Due => dateTime().nullable()();
   IntColumn get goal3Minor => integer().nullable()();
   DateTimeColumn get goal3Due => dateTime().nullable()();
+}
+
+/// Loan instalments paid every month that no message reports: a card EMI
+/// rides on the card bill, which is a transfer. Shown on Home and taken off
+/// in the plan from this list, not from transactions.
+@DataClassName('Emi')
+class Emis extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+
+  /// Home-currency minor units per month.
+  IntColumn get amountMinor => integer()();
+
+  /// The 1st of the last month it is paid; null while unknown.
+  DateTimeColumn get lastMonth => dateTime().nullable()();
 }
 
 /// What each account held at the start of a month, entered by hand.

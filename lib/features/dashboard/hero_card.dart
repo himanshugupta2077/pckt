@@ -6,6 +6,7 @@ import '../../core/theme/icons.dart';
 import '../../core/format.dart';
 import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
+import 'income_sheet.dart';
 import '../stats.dart';
 
 /// Gradient summary card: month budget spend as the hero number (with what
@@ -66,7 +67,14 @@ class HeroCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _Pill(icon: PhosphorIconsBold.arrowDownLeft, label: 'In ${money(stats.income)}', tint: Palette.mint),
+              GestureDetector(
+                onTap: () => showIncomeSheet(context),
+                child: _Pill(
+                  icon: PhosphorIconsBold.arrowDownLeft,
+                  label: 'In ${money(stats.income)}',
+                  tint: Palette.mint,
+                ),
+              ),
               _Pill(icon: PhosphorIconsBold.calendarBlank, label: '${money(perDay)}/day', tint: Colors.white),
               _Pill(icon: PhosphorIconsBold.receipt, label: '${stats.count} spends', tint: Colors.white),
             ],

@@ -16,21 +16,25 @@ class GoalPlan {
 /// The plan's outputs for [month] (normally this month).
 ///
 /// Planned left over = salary − EMI − Everyday budget − Fixed budget −
-/// Family and Insurance average − fund − investing − goals per month.
-/// The EMI stops counting after the month it ends; a goal due this month
-/// or earlier has no monthly amount.
+/// Family and Insurance average − fund − investing. Goals are not taken
+/// off: the Goals tab sets what they need against this.
+/// An EMI stops counting after its last month; a goal due this month or
+/// earlier has no monthly amount.
 class PlanOutcome {
   PlanOutcome({
     required MonthlyPlan plan,
     required DateTime month,
+    required List<Emi> emis,
     required this.everyday,
     required this.fixed,
     required this.familyAvg,
   }) : salary = plan.salaryMinor,
        fund = plan.fundMinor,
        investing = plan.investingMinor,
-       emiEnds = plan.emiEnds,
-       emi = plan.emiEnds != null && monthsSince(plan.emiEnds!, month) > 1 ? 0 : plan.emiMinor,
+       emis = [
+         for (final e in emis)
+           if (emiActive(e, month)) e,
+       ],
        goals = [
          for (final (i, (amount, due)) in [
            (plan.goal1Minor, plan.goal1Due),
@@ -41,8 +45,11 @@ class PlanOutcome {
        ];
 
   final int salary;
-  final int emi;
-  final DateTime? emiEnds;
+
+  /// EMIs still being paid in the month.
+  final List<Emi> emis;
+
+  int get emi => emis.fold(0, (s, e) => s + e.amountMinor);
 
   /// The overall monthly budget; null when none is set.
   final int? everyday;
@@ -56,13 +63,20 @@ class PlanOutcome {
 
   int get goalsPerMonth => goals.fold(0, (s, g) => s + (g.perMonth ?? 0));
 
-  int get leftOver => salary - emi - (everyday ?? 0) - fixed - familyAvg.minor - fund - investing - goalsPerMonth;
+  int get leftOver => salary - emi - (everyday ?? 0) - fixed - familyAvg.minor - fund - investing;
 
-  /// The month after the EMI ends, while it is still being paid.
-  DateTime? get emiFreedFrom => emi > 0 && emiEnds != null ? DateTime(emiEnds!.year, emiEnds!.month + 1) : null;
+  /// For each EMI with a known last month: the month after it and what
+  /// that frees up.
+  List<(DateTime, int)> get emiFreed => [
+    for (final e in emis)
+      if (e.lastMonth case final last?) (DateTime(last.year, last.month + 1), e.amountMinor),
+  ];
 
   static GoalPlan _goal(int index, int amount, DateTime due, DateTime month) {
     final left = (due.year - month.year) * 12 + due.month - month.month;
     return GoalPlan(index, amount, due, left <= 0 ? null : (amount / left).ceil());
   }
 }
+
+/// Paid in [month]: no last month yet, or [month] is not after it.
+bool emiActive(Emi e, DateTime month) => e.lastMonth == null || monthsSince(e.lastMonth!, month) <= 1;

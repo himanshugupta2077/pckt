@@ -77,6 +77,13 @@ class SettingsScreen extends ConsumerWidget {
                     onTap: () => context.push('/settings/accounts'),
                   ),
                   ListTile(
+                    leading: const Icon(PhosphorIconsRegular.sparkle),
+                    title: const Text('Ask'),
+                    subtitle: const Text('Questions about your money, answered by AI'),
+                    trailing: const Icon(PhosphorIconsBold.caretRight, size: 16),
+                    onTap: () => context.push('/ask'),
+                  ),
+                  ListTile(
                     leading: const Icon(PhosphorIconsRegular.tag),
                     title: const Text('Categories'),
                     subtitle: const Text('Add, rename, reorder or delete'),

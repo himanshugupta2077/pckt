@@ -180,8 +180,11 @@ class SmsParser implements MessageParser {
     final vpa = _vpa.firstMatch(text)?.group(1)?.toLowerCase();
     final cashDeposit = lower.contains('cash deposit');
     final mode = cashDeposit ? PaymentMode.cash : _mode(lower, vpa);
+    final cardBill = _cardBill.hasMatch(lower);
     var (merchant, counterparty, p2p) = cashDeposit
         ? ('Cash Deposit', null, false)
+        : cardBill
+        ? ('Card bill', null, false)
         : _party(text, lower, direction, vpa, sender);
     // Card and ATM rails only ever pay merchants.
     if (mode == PaymentMode.card || mode == PaymentMode.atm) p2p = false;
@@ -209,7 +212,8 @@ class SmsParser implements MessageParser {
         reference: reference,
         institution: sender.institution,
         isPersonToPerson: p2p,
-        transferHint: _transferHint(lower, direction),
+        transferHint: cardBill || _transferHint(lower, direction),
+        cardBill: cardBill,
       ),
     );
   }
@@ -362,10 +366,15 @@ class SmsParser implements MessageParser {
     return personRail && words.length == 1 && words.first.length >= 4;
   }
 
+  /// A card bill being paid, from the bank's side or the card's ("payment
+  /// of Rs X received towards your credit card", BBPS "Credit Card Bill",
+  /// CRED). Refunds and cashback don't say "payment of", so they stay out.
+  static final _cardBill = RegExp(
+    r'(payment (of .{0,25})?(has been )?received (on|towards|for|in) your .{0,25}card|'
+    r'credit card (bill )?payment|credit card bill|towards your card|payment of .{0,25}credited to your card|'
+    r'cred club credited)',
+  );
+
   static bool _transferHint(String l, TxnDirection dir) =>
-      RegExp(r'\b(to self|self transfer|own account|between your accounts)\b').hasMatch(l) ||
-      RegExp(
-        r'(payment (of .{0,25})?(has been )?received (on|towards|for|in) your .{0,25}card|'
-        r'credit card (bill )?payment|credit card bill|towards your card|payment of .{0,25}credited to your card)',
-      ).hasMatch(l);
+      RegExp(r'\b(to self|self transfer|own account|between your accounts)\b').hasMatch(l);
 }

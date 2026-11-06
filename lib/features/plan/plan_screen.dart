@@ -52,7 +52,6 @@ class _Outcome extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = outcome;
     final muted = context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant);
-    final freed = o.emiFreedFrom;
     return AppCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(
@@ -68,19 +67,16 @@ class _Outcome extends StatelessWidget {
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-          if (freed != null) Text('From ${_monthYear(freed)}: +${money(o.emi)}/month', style: muted),
+          for (final (from, amount) in o.emiFreed)
+            Text('From ${_monthYear(from)}: +${money(amount)}/month', style: muted),
           const SizedBox(height: 12),
           _Line('Salary', o.salary),
-          if (o.emi > 0) _Line('EMI', -o.emi),
+          for (final e in o.emis) _Line(e.name, -e.amountMinor, detail: 'EMI'),
           o.everyday == null ? const _Note('Everyday', 'no budget set') : _Line('Everyday budget', -o.everyday!),
           _Line('Fixed budget', -o.fixed),
           _Average('Family and insurance', o.familyAvg.minor, o.familyAvg.months),
           _Line('Fund', -o.fund),
           if (o.investing > 0) _Line('Investing', -o.investing),
-          for (final g in o.goals)
-            g.perMonth == null
-                ? _Note('Goal ${g.index}', 'due now: ${money(g.stillToSave)}')
-                : _Line('Goal ${g.index} by ${_monthYear(g.due)}', -g.perMonth!),
         ],
       ),
     );
@@ -148,7 +144,7 @@ class _Note extends StatelessWidget {
   );
 }
 
-/// The 11 inputs. Controllers are filled once from the saved plan; every
+/// The monthly inputs (goals have their own tab). Controllers are filled once from the saved plan; every
 /// change is written straight back.
 class _PlanInputs extends ConsumerStatefulWidget {
   const _PlanInputs({required this.plan});
@@ -169,12 +165,8 @@ class _PlanInputsState extends ConsumerState<_PlanInputs> {
     String text(int? minor) => minor == null || minor == 0 ? '' : amountInputText(minor, currency: _home);
     _c = {
       'salary': TextEditingController(text: text(p.salaryMinor)),
-      'emi': TextEditingController(text: text(p.emiMinor)),
       'investing': TextEditingController(text: text(p.investingMinor)),
       'fund': TextEditingController(text: text(p.fundMinor)),
-      'goal1': TextEditingController(text: text(p.goal1Minor)),
-      'goal2': TextEditingController(text: text(p.goal2Minor)),
-      'goal3': TextEditingController(text: text(p.goal3Minor)),
     };
   }
 
@@ -189,19 +181,6 @@ class _PlanInputsState extends ConsumerState<_PlanInputs> {
   void _save(PlanCompanion values) => ref.read(databaseProvider).savePlan(values);
 
   int? _amount(String key) => parseAmountInput(_c[key]!.text, currency: _home);
-
-  Future<void> _pickMonth(DateTime? current, void Function(DateTime?) onPicked) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: current ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 40),
-      initialDatePickerMode: DatePickerMode.year,
-      helpText: 'Pick any day in the month',
-    );
-    if (picked != null) onPicked(monthStart(picked));
-  }
 
   Widget _field(String key, String label, void Function(int?) onChanged, {String? helper}) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
@@ -219,34 +198,20 @@ class _PlanInputsState extends ConsumerState<_PlanInputs> {
     ),
   );
 
-  Widget _month(String label, DateTime? value, void Function(DateTime?) onPicked) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-    title: Text(label),
-    trailing: Text(
-      value == null ? 'Pick' : _monthYear(value),
-      style: context.text.titleSmall?.copyWith(color: context.colors.primary),
-    ),
-    onTap: () => _pickMonth(value, onPicked),
-  );
-
   @override
   Widget build(BuildContext context) {
-    // Read the live row for the month fields; amounts live in controllers.
-    final p = ref.watch(planProvider).value ?? widget.plan;
-    final goals = [(p.goal1Due, 'goal1'), (p.goal2Due, 'goal2'), (p.goal3Due, 'goal3')];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SectionHeader('Each month'),
         _field('salary', 'Take-home salary', (v) => _save(PlanCompanion(salaryMinor: Value(v ?? 0)))),
-        _field('emi', 'EMI', (v) => _save(PlanCompanion(emiMinor: Value(v ?? 0)))),
-        _month('EMI ends', p.emiEnds, (m) => _save(PlanCompanion(emiEnds: Value(m)))),
+        const _EmiList(),
         const SizedBox(height: 8),
         _field(
           'investing',
           'Investing',
           (v) => _save(PlanCompanion(investingMinor: Value(v ?? 0))),
-          helper: 'Not counting what you save for the goals below',
+          helper: 'Not counting what you save for your goals',
         ),
         _field(
           'fund',
@@ -254,45 +219,120 @@ class _PlanInputsState extends ConsumerState<_PlanInputs> {
           (v) => _save(PlanCompanion(fundMinor: Value(v ?? 0))),
           helper: 'Set aside for big and occasional buys',
         ),
-        const SizedBox(height: 8),
-        const SectionHeader('Goals'),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-          child: Text(
-            'Up to three, emergency fund first. Everyday, Fixed, Family and Insurance come from your budget and '
-            'past months, so they aren\'t typed here.',
-            style: context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant),
-          ),
-        ),
-        for (final (i, (due, key)) in goals.indexed) ...[
-          TextField(
-            controller: _c[key],
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [AmountInputFormatter(currency: _home)],
-            onChanged: (_) => _save(_goalAmount(i, _amount(key))),
-            decoration: InputDecoration(
-              labelText: i == 0 ? 'Goal 1: still to save (emergency fund)' : 'Goal ${i + 1}: still to save',
-              prefixText: '${currencySymbol(_home)} ',
-            ),
-          ),
-          _month('Goal ${i + 1} by', due, (m) => _save(_goalDue(i, m))),
-          const SizedBox(height: 8),
-        ],
       ],
     );
   }
+}
 
-  static PlanCompanion _goalAmount(int i, int? v) => switch (i) {
-    0 => PlanCompanion(goal1Minor: Value(v)),
-    1 => PlanCompanion(goal2Minor: Value(v)),
-    _ => PlanCompanion(goal3Minor: Value(v)),
-  };
+/// The EMIs, each tappable to edit, and "Add EMI". Card EMIs never show up
+/// as a message, so this list is where they come from.
+class _EmiList extends ConsumerWidget {
+  const _EmiList();
 
-  static PlanCompanion _goalDue(int i, DateTime? m) => switch (i) {
-    0 => PlanCompanion(goal1Due: Value(m)),
-    1 => PlanCompanion(goal2Due: Value(m)),
-    _ => PlanCompanion(goal3Due: Value(m)),
-  };
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final emis = ref.watch(emisProvider).value ?? const <Emi>[];
+    final month = monthStart(DateTime.now());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final e in emis)
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            title: Text(e.name),
+            subtitle: Text(
+              e.lastMonth == null
+                  ? 'Last month not set'
+                  : emiActive(e, month)
+                  ? 'Until ${_monthYear(e.lastMonth!)}'
+                  : 'Ended ${_monthYear(e.lastMonth!)}',
+            ),
+            trailing: Text('${money(e.amountMinor)}/month', style: context.text.titleSmall),
+            onTap: () => showEmiDialog(context, ref, e),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showEmiDialog(context, ref, null),
+            icon: const Icon(PhosphorIconsBold.plus, size: 18),
+            label: const Text('Add EMI'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Adds or edits one EMI: name, amount per month, last month paid.
+Future<void> showEmiDialog(BuildContext context, WidgetRef ref, Emi? emi) async {
+  final home = Currencies.home;
+  final name = TextEditingController(text: emi?.name);
+  final amount = TextEditingController(text: emi == null ? '' : amountInputText(emi.amountMinor, currency: home));
+  var last = emi?.lastMonth;
+  final db = ref.read(databaseProvider);
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        title: Text(emi == null ? 'Add EMI' : 'EMI'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'What for', hintText: 'e.g. MacBook, HDFC card'),
+            ),
+            TextField(
+              controller: amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter(currency: home)],
+              decoration: InputDecoration(labelText: 'Per month', prefixText: '${currencySymbol(home)} '),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Last month paid'),
+              trailing: Text(last == null ? 'Pick' : _monthYear(last!)),
+              onTap: () async {
+                final now = DateTime.now();
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: last ?? now,
+                  firstDate: DateTime(now.year - 1),
+                  lastDate: DateTime(now.year + 30),
+                  initialDatePickerMode: DatePickerMode.year,
+                  helpText: 'Pick any day in the month',
+                );
+                if (picked != null) setState(() => last = monthStart(picked));
+              },
+            ),
+          ],
+        ),
+        actions: [
+          if (emi != null)
+            TextButton(
+              onPressed: () async {
+                await db.deleteEmi(emi.id);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Delete'),
+            ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final minor = parseAmountInput(amount.text, currency: home);
+              if (name.text.trim().isEmpty || minor == null || minor <= 0) return;
+              await db.saveEmi(id: emi?.id, name: name.text.trim(), amountMinor: minor, lastMonth: last);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+  name.dispose();
+  amount.dispose();
 }
 
 /// One line on Home that opens the plan.

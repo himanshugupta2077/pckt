@@ -319,12 +319,15 @@ const defaultCategories = <CategorySeed>[
     'emi',
     1,
     bucket: Bucket.outside,
-    keywords: ['emi', 'loan', 'bajaj finance', 'home credit', 'credit card payment', 'cred'],
+    // Card bills (CRED included) are transfers, never EMI: the swipes are
+    // counted already.
+    keywords: ['emi', 'loan', 'bajaj finance', 'home credit'],
   ),
   CategorySeed('People', 'people', -1),
   CategorySeed('Family', 'family', 6, bucket: Bucket.outside),
   CategorySeed('Cash Withdrawal', 'cash', 5, keywords: ['atm', 'cash withdrawal']),
-  CategorySeed('Transfers', 'transfer', -1, bucket: Bucket.outside),
+  // Money between your own accounts: neither spending nor income.
+  CategorySeed('Transfers', 'transfer', -1, bucket: Bucket.ignore),
   CategorySeed('Other', 'other', -1),
   // Income
   CategorySeed('Salary', 'salary', 2, isIncome: true, keywords: ['salary', 'payroll', 'sal cr']),

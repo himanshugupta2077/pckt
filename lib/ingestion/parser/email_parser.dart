@@ -202,6 +202,7 @@ class EmailParser implements MessageParser {
         institution: sender.isInstitution ? sender.name : t.institution,
         isPersonToPerson: t.isPersonToPerson,
         transferHint: t.transferHint,
+        cardBill: t.cardBill,
       ),
     );
   }

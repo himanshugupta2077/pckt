@@ -16,18 +16,22 @@ final planTxnsProvider = StreamProvider<List<TxnView>>((ref) {
   return ref.watch(databaseProvider).watchTxns(from: DateTime(m.year, m.month - 6), to: m);
 });
 
+final emisProvider = StreamProvider<List<Emi>>((ref) => ref.watch(databaseProvider).watchEmis());
+
 final planOutcomeProvider = Provider<PlanOutcome?>((ref) {
   final plan = ref.watch(planProvider).value;
+  final emis = ref.watch(emisProvider).value;
   final txns = ref.watch(planTxnsProvider).value;
   final start = ref.watch(dataStartProvider);
   final budgets = ref.watch(budgetsProvider).value;
-  if (plan == null || txns == null || budgets == null || !start.hasValue) return null;
+  if (plan == null || emis == null || txns == null || budgets == null || !start.hasValue) return null;
   final month = monthStart(DateTime.now());
   final months = completeMonths(month, start.value);
   final overall = budgets.firstWhereOrNull((b) => b.categoryId == null && b.active && b.currency == Currencies.home);
   return PlanOutcome(
     plan: plan,
     month: month,
+    emis: emis,
     everyday: overall?.amountMinor,
     fixed: bucketBudgetMinor,
     familyAvg: monthlyAverage(txns, months, isFamilyOrInsurance),

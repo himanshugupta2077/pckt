@@ -36,13 +36,13 @@ String bucketLabel(Bucket b) => switch (b) {
   Bucket.fixed => 'Fixed',
   Bucket.fund => 'Fund',
   Bucket.outside => 'Outside',
-  Bucket.loan => 'Loan',
+  Bucket.ignore => 'Ignore',
 };
 
-/// Money lent or borrowed and paid back, in either direction: left out of
-/// spending and income alike. Decided like a bucket (the payment's own
-/// choice, then the payee's, then the category's).
-bool isLoan(TxnView v) => (v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket) == Bucket.loan;
+/// Neither spending nor income (money lent or borrowed and paid back, cash
+/// moved into the bank), in either direction. Decided like a bucket (the
+/// payment's own choice, then the payee's, then the category's).
+bool isIgnored(TxnView v) => (v.txn.bucket ?? v.rule?.bucket ?? v.category?.bucket) == Bucket.ignore;
 
 /// Short line for the transaction sheet.
 String budgetSourceLabel(TxnView v) {

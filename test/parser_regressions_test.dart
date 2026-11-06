@@ -295,4 +295,14 @@ void main() {
       );
     });
   });
+
+  test('refunds and cashback to a card are not card bills', () {
+    for (final body in [
+      'Refund of Rs 500.00 credited to your HDFC Bank Credit Card XX1234 from AMAZON on 01-11-26.',
+      'Cashback of Rs 50 has been credited to your card ending 1234.',
+    ]) {
+      final t = ok('AD-HDFCBK-S', body);
+      expect((t.cardBill, t.merchant == 'Card bill'), (false, false), reason: body);
+    }
+  });
 }

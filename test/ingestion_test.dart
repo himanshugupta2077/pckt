@@ -157,6 +157,71 @@ void main() {
     expect(await db.sourcesOf(kept.id), hasLength(2));
   });
 
+  test("one card bill's bank debit and the card's two confirmations are one transfer", () async {
+    await svc.ingest([
+      msg(
+        'AD-HDFCBK-S',
+        'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 6083.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 1234 ON 1-11-2026.',
+        t0,
+      ),
+      msg(
+        'JX-HDFCBK-S',
+        'Alert! Paid Rs. 6,083.00 For: Credit Card payment From HDFC Bank A/c XX1111 Via Online Banking.',
+        t0,
+      ),
+      msg(
+        'VM-HDFCBK-S',
+        'HDFC Bank Cardmember, Payment of Rs 6083 was credited to your card ending 1234 on 01/NOV/2026.',
+        t0.add(const Duration(days: 1)),
+      ),
+    ]);
+    final bill = await db.select(db.transactions).getSingle();
+    expect(
+      (bill.direction, bill.isTransfer, bill.merchant, bill.accountHint),
+      (TxnDirection.debit, true, 'Card bill', '1111'),
+    );
+    expect(await db.sourcesOf(bill.id), hasLength(3));
+  });
+
+  test('a card bill paid through BBPS or CRED pairs with the card side', () async {
+    await svc.ingest([
+      msg(
+        'JM-HDFCBK-S',
+        'Bill Paid! ICICI Credit Card Bill 9999999999 of Rs. 577.07 paid on 01-Oct-2026 from HDFC Bank Account XXXXXXXXXX1111.',
+        t0,
+      ),
+      msg(
+        'AD-ICICIT-S',
+        'Payment of Rs 577.07 has been received on your ICICI Bank Credit Card XX2222 through Bharat Bill Payment System on 01-OCT-26.',
+        t0.add(const Duration(minutes: 20)),
+      ),
+      msg(
+        'AX-ICICIT-S',
+        'ICICI Bank Acct XX3333 debited for Rs 538.64 on 05-Nov-26; CRED Club credited. UPI:100000000002.',
+        t0.add(const Duration(days: 4)),
+      ),
+    ]);
+    final txns = await db.select(db.transactions).get();
+    expect(txns, hasLength(2));
+    expect(txns.every((t) => t.isTransfer && t.merchant == 'Card bill' && t.direction == TxnDirection.debit), isTrue);
+  });
+
+  test('two card bills of the same amount a month apart stay two', () async {
+    await svc.ingest([
+      msg(
+        'JX-HDFCBK-S',
+        'Alert! Paid Rs. 500.00 For: Credit Card payment From HDFC Bank A/c XX1111 Via Online Banking.',
+        t0,
+      ),
+      msg(
+        'JX-HDFCBK-S',
+        'Alert! Paid Rs. 500.00 For: Credit Card payment From HDFC Bank A/c XX1111 Via Online Banking.',
+        t0.add(const Duration(days: 30)),
+      ),
+    ]);
+    expect(await db.select(db.transactions).get(), hasLength(2));
+  });
+
   test('different refs never merge', () async {
     await svc.ingest([
       msg('VM-HDFCBK', 'Sent Rs.250.00 From HDFC Bank A/C *4521 To SWIGGY On 12/10/26 Ref 528512345678', t0),

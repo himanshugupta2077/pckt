@@ -67,3 +67,26 @@ class BucketMenu extends StatelessWidget {
     ),
   );
 }
+
+/// Asks why a payment is ignored ("Mansi's loan, paid back"). Returns the
+/// note to save, or null if the dialog was dismissed.
+Future<String?> askWhyIgnored(BuildContext context, String? current) {
+  final c = TextEditingController(text: current);
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Why ignore it?'),
+      content: TextField(
+        controller: c,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(hintText: 'e.g. Loan from family, paid back'),
+        onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Skip')),
+        TextButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Save')),
+      ],
+    ),
+  ).whenComplete(c.dispose);
+}

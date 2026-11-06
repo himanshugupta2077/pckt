@@ -48,6 +48,7 @@ abstract final class PrefKeys {
   static const smsImportFrom = 'sms.importFromMillis';
   static const smsParserVersion = 'sms.parserVersion';
   static const repairedOct2026 = 'repair.oct2026';
+  static const mergedCardBills = 'repair.cardBills2026';
 
   /// Real-time SMS transaction notifications. Read natively by
   /// SmsAlertReceiver.kt as `flutter.sms.alerts` — keep the name in sync.

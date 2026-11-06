@@ -9,6 +9,7 @@ import 'features/assistant/assistant_screen.dart';
 import 'features/budgets/budgets_screen.dart';
 import 'features/budgets/to_sort_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
+import 'features/goals/goals_screen.dart';
 import 'features/insights/insights_screen.dart';
 import 'features/lock/app_lock_gate.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -47,6 +48,14 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/to-sort', builder: (_, _) => const ToSortScreen()),
       GoRoute(path: '/plan', builder: (_, _) => const PlanScreen()),
       GoRoute(path: '/recurring', builder: (_, _) => const RecurringScreen()),
+      // Opened from Settings; the Goals tab took its place in the bar.
+      GoRoute(
+        path: '/ask',
+        builder: (_, _) => Scaffold(
+          appBar: AppBar(title: const Text('Ask')),
+          body: const AssistantScreen(),
+        ),
+      ),
       GoRoute(path: '/settings/accounts', builder: (_, _) => const AccountsScreen()),
       GoRoute(path: '/settings/categories', builder: (_, _) => const CategoriesScreen()),
       StatefulShellRoute.indexedStack(
@@ -67,7 +76,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
             routes: [GoRoute(path: '/insights', builder: (_, _) => const InsightsScreen())],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/ask', builder: (_, _) => const AssistantScreen())],
+            routes: [GoRoute(path: '/goals', builder: (_, _) => const GoalsScreen())],
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen())],

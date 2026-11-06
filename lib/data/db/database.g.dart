@@ -4007,6 +4007,258 @@ class BalanceSnapshotsCompanion extends UpdateCompanion<BalanceSnapshot> {
   }
 }
 
+class $EmisTable extends Emis with TableInfo<$EmisTable, Emi> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EmisTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _amountMinorMeta = const VerificationMeta('amountMinor');
+  @override
+  late final GeneratedColumn<int> amountMinor = GeneratedColumn<int>(
+    'amount_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastMonthMeta = const VerificationMeta('lastMonth');
+  @override
+  late final GeneratedColumn<DateTime> lastMonth = GeneratedColumn<DateTime>(
+    'last_month',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, amountMinor, lastMonth];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'emis';
+  @override
+  VerificationContext validateIntegrity(Insertable<Emi> instance, {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(_nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('amount_minor')) {
+      context.handle(_amountMinorMeta, amountMinor.isAcceptableOrUnknown(data['amount_minor']!, _amountMinorMeta));
+    } else if (isInserting) {
+      context.missing(_amountMinorMeta);
+    }
+    if (data.containsKey('last_month')) {
+      context.handle(_lastMonthMeta, lastMonth.isAcceptableOrUnknown(data['last_month']!, _lastMonthMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Emi map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Emi(
+      id: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping.read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      amountMinor: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}amount_minor'])!,
+      lastMonth: attachedDatabase.typeMapping.read(DriftSqlType.dateTime, data['${effectivePrefix}last_month']),
+    );
+  }
+
+  @override
+  $EmisTable createAlias(String alias) {
+    return $EmisTable(attachedDatabase, alias);
+  }
+}
+
+class Emi extends DataClass implements Insertable<Emi> {
+  final int id;
+  final String name;
+
+  /// Home-currency minor units per month.
+  final int amountMinor;
+
+  /// The 1st of the last month it is paid; null while unknown.
+  final DateTime? lastMonth;
+  const Emi({required this.id, required this.name, required this.amountMinor, this.lastMonth});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['amount_minor'] = Variable<int>(amountMinor);
+    if (!nullToAbsent || lastMonth != null) {
+      map['last_month'] = Variable<DateTime>(lastMonth);
+    }
+    return map;
+  }
+
+  EmisCompanion toCompanion(bool nullToAbsent) {
+    return EmisCompanion(
+      id: Value(id),
+      name: Value(name),
+      amountMinor: Value(amountMinor),
+      lastMonth: lastMonth == null && nullToAbsent ? const Value.absent() : Value(lastMonth),
+    );
+  }
+
+  factory Emi.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Emi(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      amountMinor: serializer.fromJson<int>(json['amountMinor']),
+      lastMonth: serializer.fromJson<DateTime?>(json['lastMonth']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'amountMinor': serializer.toJson<int>(amountMinor),
+      'lastMonth': serializer.toJson<DateTime?>(lastMonth),
+    };
+  }
+
+  Emi copyWith({int? id, String? name, int? amountMinor, Value<DateTime?> lastMonth = const Value.absent()}) => Emi(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    amountMinor: amountMinor ?? this.amountMinor,
+    lastMonth: lastMonth.present ? lastMonth.value : this.lastMonth,
+  );
+  Emi copyWithCompanion(EmisCompanion data) {
+    return Emi(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      amountMinor: data.amountMinor.present ? data.amountMinor.value : this.amountMinor,
+      lastMonth: data.lastMonth.present ? data.lastMonth.value : this.lastMonth,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Emi(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('amountMinor: $amountMinor, ')
+          ..write('lastMonth: $lastMonth')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, amountMinor, lastMonth);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Emi &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.amountMinor == this.amountMinor &&
+          other.lastMonth == this.lastMonth);
+}
+
+class EmisCompanion extends UpdateCompanion<Emi> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> amountMinor;
+  final Value<DateTime?> lastMonth;
+  const EmisCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.amountMinor = const Value.absent(),
+    this.lastMonth = const Value.absent(),
+  });
+  EmisCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required int amountMinor,
+    this.lastMonth = const Value.absent(),
+  }) : name = Value(name),
+       amountMinor = Value(amountMinor);
+  static Insertable<Emi> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? amountMinor,
+    Expression<DateTime>? lastMonth,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (amountMinor != null) 'amount_minor': amountMinor,
+      if (lastMonth != null) 'last_month': lastMonth,
+    });
+  }
+
+  EmisCompanion copyWith({Value<int>? id, Value<String>? name, Value<int>? amountMinor, Value<DateTime?>? lastMonth}) {
+    return EmisCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      amountMinor: amountMinor ?? this.amountMinor,
+      lastMonth: lastMonth ?? this.lastMonth,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (amountMinor.present) {
+      map['amount_minor'] = Variable<int>(amountMinor.value);
+    }
+    if (lastMonth.present) {
+      map['last_month'] = Variable<DateTime>(lastMonth.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmisCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('amountMinor: $amountMinor, ')
+          ..write('lastMonth: $lastMonth')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4018,6 +4270,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $PlanTable plan = $PlanTable(this);
   late final $BalanceSnapshotsTable balanceSnapshots = $BalanceSnapshotsTable(this);
+  late final $EmisTable emis = $EmisTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
@@ -4030,6 +4283,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     budgets,
     plan,
     balanceSnapshots,
+    emis,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -6619,6 +6873,135 @@ typedef $$BalanceSnapshotsTableProcessedTableManager =
       BalanceSnapshot,
       PrefetchHooks Function()
     >;
+typedef $$EmisTableCreateCompanionBuilder = EmisCompanion Function({
+  Value<int> id,
+  required String name,
+  required int amountMinor,
+  Value<DateTime?> lastMonth,
+});
+typedef $$EmisTableUpdateCompanionBuilder = EmisCompanion Function({
+  Value<int> id,
+  Value<String> name,
+  Value<int> amountMinor,
+  Value<DateTime?> lastMonth,
+});
+
+class $$EmisTableFilterComposer extends Composer<_$AppDatabase, $EmisTable> {
+  $$EmisTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get amountMinor =>
+      $composableBuilder(column: $table.amountMinor, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastMonth =>
+      $composableBuilder(column: $table.lastMonth, builder: (column) => ColumnFilters(column));
+}
+
+class $$EmisTableOrderingComposer extends Composer<_$AppDatabase, $EmisTable> {
+  $$EmisTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get amountMinor =>
+      $composableBuilder(column: $table.amountMinor, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastMonth =>
+      $composableBuilder(column: $table.lastMonth, builder: (column) => ColumnOrderings(column));
+}
+
+class $$EmisTableAnnotationComposer extends Composer<_$AppDatabase, $EmisTable> {
+  $$EmisTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name => $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get amountMinor => $composableBuilder(column: $table.amountMinor, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastMonth => $composableBuilder(column: $table.lastMonth, builder: (column) => column);
+}
+
+class $$EmisTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EmisTable,
+          Emi,
+          $$EmisTableFilterComposer,
+          $$EmisTableOrderingComposer,
+          $$EmisTableAnnotationComposer,
+          $$EmisTableCreateCompanionBuilder,
+          $$EmisTableUpdateCompanionBuilder,
+          (Emi, BaseReferences<_$AppDatabase, $EmisTable, Emi>),
+          Emi,
+          PrefetchHooks Function()
+        > {
+  $$EmisTableTableManager(_$AppDatabase db, $EmisTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$EmisTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$EmisTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$EmisTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<int> amountMinor = const Value.absent(),
+            Value<DateTime?> lastMonth = const Value.absent(),
+          }) => EmisCompanion(id: id, name: name, amountMinor: amountMinor, lastMonth: lastMonth),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String name,
+            required int amountMinor,
+            Value<DateTime?> lastMonth = const Value.absent(),
+          }) => EmisCompanion.insert(id: id, name: name, amountMinor: amountMinor, lastMonth: lastMonth),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable<$EmisTable, Emi>(table), BaseReferences<_$AppDatabase, $EmisTable, Emi>(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EmisTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EmisTable,
+      Emi,
+      $$EmisTableFilterComposer,
+      $$EmisTableOrderingComposer,
+      $$EmisTableAnnotationComposer,
+      $$EmisTableCreateCompanionBuilder,
+      $$EmisTableUpdateCompanionBuilder,
+      (Emi, BaseReferences<_$AppDatabase, $EmisTable, Emi>),
+      Emi,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6632,4 +7015,5 @@ class $AppDatabaseManager {
   $$PlanTableTableManager get plan => $$PlanTableTableManager(_db, _db.plan);
   $$BalanceSnapshotsTableTableManager get balanceSnapshots =>
       $$BalanceSnapshotsTableTableManager(_db, _db.balanceSnapshots);
+  $$EmisTableTableManager get emis => $$EmisTableTableManager(_db, _db.emis);
 }

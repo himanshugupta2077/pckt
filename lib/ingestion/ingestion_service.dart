@@ -191,6 +191,15 @@ class IngestionService {
     final converted = txn.convertedMinor != null && txn.convertedCurrency != null && txn.convertedCurrency != currency
         ? (txn.convertedMinor!, txn.convertedCurrency!)
         : null;
+    if (txn.cardBill) {
+      final bill = await _cardBillFor(txn, currency);
+      if (bill != null) {
+        report.merged++;
+        await _joinCardBill(bill, txn, await _resolveAccount(txn, body, accounts));
+        await writeRaw(ParseStatus.merged, txnId: bill.id, score: 1);
+        return;
+      }
+    }
     final sourceKey = DedupEngine.sourceKey(source, sender);
     final match = dedup.best(
       txn,
@@ -247,6 +256,38 @@ class IngestionService {
     if (account != null && !txn.transferHint) {
       await _detectSelfTransfer(id, txn, currency, account.id, categorizer.transferId);
     }
+  }
+
+  /// The card bill [t] belongs to: a card-bill payment of the same amount
+  /// within three days, from either side (bank debit or card credit).
+  Future<Transaction?> _cardBillFor(ParsedTxn t, String currency) =>
+      (db.select(db.transactions)
+            ..where(
+              (x) =>
+                  x.amountMinor.equals(t.amountMinor) &
+                  x.currency.equals(currency) &
+                  x.merchant.equals('Card bill') &
+                  x.occurredAt.isBetweenValues(
+                    t.occurredAt.subtract(const Duration(days: 3)),
+                    t.occurredAt.add(const Duration(days: 3)),
+                  ),
+            )
+            ..limit(1))
+          .getSingleOrNull();
+
+  /// Adds [t]'s side to [bill]. The bank's debit is the one kept: it says
+  /// which account paid.
+  Future<void> _joinCardBill(Transaction bill, ParsedTxn t, Account? account) async {
+    final debit = t.direction == TxnDirection.debit && bill.direction == TxnDirection.credit;
+    await (db.update(db.transactions)..where((x) => x.id.equals(bill.id))).write(
+      TransactionsCompanion(
+        isTransfer: const Value(true),
+        direction: debit ? const Value(TxnDirection.debit) : const Value.absent(),
+        accountId: debit ? Value(account?.id) : const Value.absent(),
+        accountHint: debit ? Value(t.accountHint) : const Value.absent(),
+        reference: bill.reference == null ? Value(t.reference) : const Value.absent(),
+      ),
+    );
   }
 
   Future<List<DedupCandidate>> _candidates(ParsedTxn t, String currency, (int, String)? converted) async {
@@ -331,6 +372,72 @@ class IngestionService {
       log.add('rule removed: ${r.pattern}');
     }
     log.addAll(await resolveDuplicates());
+    return log;
+  });
+
+  /// One-time: joins the messages of each card bill since [from] (the
+  /// bank's debit and the card's confirmations, saved as separate payments
+  /// before card bills were recognised) into one transfer, kept as the
+  /// bank's debit. Answers the user gave those rows (a category, a flipped
+  /// direction) are replaced: a card bill is never spending. Returns a line
+  /// per change.
+  Future<List<String>> mergeCardBills(DateTime from) => db.transaction(() async {
+    final log = <String>[];
+    final bills = <(Transaction, TxnDirection)>[];
+    final txns =
+        await (db.select(db.transactions)
+              ..where((t) => t.occurredAt.isBiggerOrEqualValue(from))
+              ..orderBy([(t) => OrderingTerm(expression: t.occurredAt)]))
+            .get();
+    for (final t in txns) {
+      for (final m in await db.sourcesOf(t.id)) {
+        final r = _parserFor(m.source).parse(
+          RawInput(
+            source: m.source,
+            externalId: m.externalId,
+            sender: m.sender,
+            body: m.body,
+            receivedAt: m.receivedAt,
+          ),
+        );
+        if (r case Parsed(:final txn) when txn.cardBill) {
+          bills.add((t, txn.direction));
+          break;
+        }
+      }
+    }
+    final transfers = (await db.allCategories()).where((c) => (c.seedName ?? c.name) == 'Transfers').firstOrNull;
+    final done = <int>{};
+    for (final (i, (t, _)) in bills.indexed) {
+      if (done.contains(t.id)) continue;
+      final group = [
+        for (final (u, dir) in bills.skip(i))
+          if (!done.contains(u.id) &&
+              u.amountMinor == t.amountMinor &&
+              u.occurredAt.difference(t.occurredAt).abs() <= const Duration(days: 3))
+            (u, dir),
+      ];
+      final keep = group.firstWhere((g) => g.$2 == TxnDirection.debit, orElse: () => group.first).$1;
+      for (final (u, _) in group) {
+        done.add(u.id);
+        if (u.id != keep.id) await db.mergeInto(u.id, keep.id);
+      }
+      final debit = group.where((g) => g.$2 == TxnDirection.debit).firstOrNull?.$1;
+      await (db.update(db.transactions)..where((x) => x.id.equals(keep.id))).write(
+        TransactionsCompanion(
+          merchant: const Value('Card bill'),
+          isTransfer: const Value(true),
+          direction: debit == null ? const Value.absent() : const Value(TxnDirection.debit),
+          categoryId: Value(transfers?.id),
+          categoryLocked: const Value(false),
+          bucket: const Value(null),
+        ),
+      );
+      log.add(
+        'card bill #${keep.id} ${keep.occurredAt.toIso8601String().substring(0, 10)} ${keep.amountMinor / 100}: '
+        '${group.length} message(s)',
+      );
+    }
     return log;
   });
 

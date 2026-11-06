@@ -150,7 +150,8 @@ void main() {
       };
       expect(inBucket(Bucket.fixed), {'Bills & Utilities', 'Mobile & Internet', 'Subscriptions', 'Fitness'});
       expect(inBucket(Bucket.fund), {'Big & occasional'});
-      expect(inBucket(Bucket.outside), {'Investments', 'Insurance', 'Loans & EMI', 'Transfers', 'Family'});
+      expect(inBucket(Bucket.outside), {'Investments', 'Insurance', 'Loans & EMI', 'Family'});
+      expect(inBucket(Bucket.ignore), {'Transfers'});
       expect(cats.where((c) => c.name == 'Gym & supplements'), isEmpty);
       expect(await db.watchPlan().first, isNotNull, reason: 'a new install has its plan row');
     });
@@ -271,6 +272,39 @@ void main() {
       expect(await fresh.watchPlan().first, isNotNull);
     });
 
+    test('a v6 backup restores its single EMI into the EMI list', () async {
+      await db.savePlan(PlanCompanion(emiMinor: const Value(3820000), emiEnds: Value(DateTime(2027, 3))));
+      final m = jsonDecode(await DataExport(db).backupJson()) as Map<String, Object?>;
+      m['schemaVersion'] = 6;
+      (m['tables']! as Map).remove('emis');
+      final fresh = memoryDb();
+      addTearDown(fresh.close);
+      await DataExport(fresh).restore(jsonEncode(m));
+      final emi = (await fresh.watchEmis().first).single;
+      expect((emi.name, emi.amountMinor, emi.lastMonth), ('EMI', 3820000, DateTime(2027, 3)));
+      // A v7 backup carries the list as it is: no second seed.
+      final again = memoryDb();
+      addTearDown(again.close);
+      await DataExport(again).restore(await DataExport(fresh).backupJson());
+      expect(await again.watchEmis().first, hasLength(1));
+    });
+
+    test('ticking a credit as income overrides an Ignore from its payee or category', () async {
+      final family = (await db.allCategories()).firstWhere((c) => c.name == 'Family');
+      await db.updateCategory(family.id, bucket: Bucket.ignore);
+      final id = await db.addManual(
+        amountMinor: 1800000,
+        direction: TxnDirection.credit,
+        at: DateTime(2026, 11, 2),
+        categoryId: family.id,
+      );
+      Future<TxnView> view() async => (await db.watchTxn(id).first)!;
+      expect(isIgnored(await view()), isTrue);
+      await db.setTxnBucket(id, Bucket.everyday); // what the income tick writes
+      expect(isIgnored(await view()), isFalse);
+      expect(MonthStats([await view()], DateTime(2026, 11)).income, 1800000);
+    });
+
     test('the plan and balances are in the backup', () async {
       await db.savePlan(const PlanCompanion(salaryMinor: Value(14200000), goal1Minor: Value(30000000)));
       await db.saveSnapshots(DateTime(2026, 11), [('Bank', 5000000, false), ('Card due', 6000000, true)]);
@@ -335,7 +369,26 @@ void main() {
       expect((await db.select(db.transactions).get()).single.bucket, isNull);
       await db.setPayeeBucket('Zepto', Bucket.everyday); // bucket-only rule needs the nullable category
       expect(await db.allMerchantRules(), hasLength(2));
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 6);
+      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 7);
+      await db.close();
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+
+  test('v6 → v7 migration moves the plan EMI into the EMI list', () async {
+    final dir = await Directory.systemTemp.createTemp('pckt_mig7');
+    final file = File('${dir.path}/db.sqlite');
+    try {
+      var db = AppDatabase(NativeDatabase(file));
+      await db.savePlan(PlanCompanion(emiMinor: const Value(3820000), emiEnds: Value(DateTime(2027, 3))));
+      await db.customStatement('DROP TABLE emis');
+      await db.customStatement('PRAGMA user_version = 6');
+      await db.close();
+
+      db = AppDatabase(NativeDatabase(file));
+      final emi = (await db.watchEmis().first).single;
+      expect((emi.name, emi.amountMinor, emi.lastMonth), ('EMI', 3820000, DateTime(2027, 3)));
       await db.close();
     } finally {
       await dir.delete(recursive: true);
@@ -430,7 +483,7 @@ void main() {
       expect(views[healthkart]!.source, BudgetSource.payee);
       expect(views[plain]!.bucket, Bucket.everyday);
       expect((await db.watchPlan().first)?.fundMinor, 1000000);
-      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 6);
+      expect(await db.customSelect('PRAGMA user_version').map((r) => r.data.values.first).getSingle(), 7);
       await db.close();
     } finally {
       await dir.delete(recursive: true);

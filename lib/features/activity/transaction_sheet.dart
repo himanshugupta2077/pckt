@@ -195,8 +195,8 @@ class TransactionSheet extends ConsumerWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 4),
           value: t.isTransfer,
           onChanged: (v) => db.setTransfer(id, v),
-          title: const Text('Transfer between my accounts'),
-          subtitle: const Text('Excluded from spending and income'),
+          title: const Text('Transfer or card bill'),
+          subtitle: const Text('Money moved between your own accounts or cards: not spending or income'),
           secondary: const Icon(PhosphorIconsRegular.arrowsLeftRight),
         ),
         _BudgetSection(view: view),
@@ -277,9 +277,14 @@ class _BudgetSectionState extends ConsumerState<_BudgetSection> {
         ),
         BucketPicker(
           value: d.bucket,
-          onChanged: (b) => merchant != null && _applyAll
-              ? db.setTxnBucket(t.id, null).then((_) => db.setPayeeBucket(merchant, b))
-              : db.setTxnBucket(t.id, b),
+          onChanged: (b) async {
+            await (merchant != null && _applyAll
+                ? db.setTxnBucket(t.id, null).then((_) => db.setPayeeBucket(merchant, b))
+                : db.setTxnBucket(t.id, b));
+            if (b != Bucket.ignore || !context.mounted) return;
+            final note = await askWhyIgnored(context, t.note);
+            if (note != null) await db.setNote(t.id, note.isEmpty ? null : note);
+          },
         ),
         if (merchant != null)
           CheckboxListTile(
