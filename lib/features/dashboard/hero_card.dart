@@ -7,37 +7,54 @@ import '../../ui/widgets.dart';
 import 'income_sheet.dart';
 import 'out_sheet.dart';
 
-/// The month at a glance: what's left as the one big number, In and Out
-/// under it. In is income. Out is every rupee that left your accounts
-/// except moves between them: spending, EMIs, money invested and money lent
-/// (less what came back). Whole rupees: paise only add noise here.
+/// What's left of Everyday, Recurring and Fund, each on its own, with In
+/// and Out along the bottom. Whole rupees: paise only add noise here.
 class MonthCard extends StatelessWidget {
   const MonthCard({
     super.key,
     required this.month,
+    required this.everydayLeft,
+    required this.fixedLeft,
+    required this.fundLeft,
     required this.inMinor,
     required this.outMinor,
-    this.investedMinor = 0,
   });
 
   final DateTime month;
+
+  /// Budget minus spent. Negative means over.
+  final int everydayLeft;
+  final int fixedLeft;
+  final int fundLeft;
   final int inMinor;
   final int outMinor;
-
-  /// Put into investments this month, net: part of Out, named under it.
-  final int investedMinor;
 
   static String _rupees(int minor) => '${minor < 0 ? '−' : ''}${money((minor.abs() / 100).round() * 100)}';
 
   @override
   Widget build(BuildContext context) {
-    final left = inMinor - outMinor;
     final soft = Colors.white.withValues(alpha: 0.72);
     final small = context.text.titleSmall?.copyWith(
       color: Colors.white,
       fontWeight: FontWeight.w600,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
+    Widget remain(String label, int left) {
+      final over = left < 0;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: context.text.bodyMedium?.copyWith(color: soft))),
+            Text(
+              over ? '${_rupees(-left)} over' : '${_rupees(left)} left',
+              style: small?.copyWith(color: over ? Palette.coral : Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+
     Widget part(String label, int minor, {required bool moneyIn, VoidCallback? onTap}) {
       final color = moneyIn ? Palette.income : Palette.expense;
       return InkWell(
@@ -82,34 +99,17 @@ class MonthCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Left this month', style: context.text.bodyMedium?.copyWith(color: soft)),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _rupees(left),
-              style: context.text.displaySmall?.copyWith(
-                color: left < 0 ? Palette.coral : Colors.white,
-                fontWeight: FontWeight.w700,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 20,
-            runSpacing: 4,
+          remain('Everyday', everydayLeft),
+          remain('Recurring', fixedLeft),
+          remain('Fund', fundLeft),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               part('In', inMinor, moneyIn: true, onTap: () => showIncomeSheet(context)),
               part('Out', outMinor, moneyIn: false, onTap: () => showOutSheet(context)),
             ],
           ),
-          if (investedMinor > 0)
-            Text(
-              'Out includes ${_rupees(investedMinor)} invested',
-              style: context.text.bodySmall?.copyWith(color: soft),
-            ),
         ],
       ),
     );

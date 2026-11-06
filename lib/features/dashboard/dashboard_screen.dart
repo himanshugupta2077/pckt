@@ -11,6 +11,7 @@ import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
 import '../budgets/bucket_stats.dart';
 import '../budgets/budget_providers.dart';
+import '../budgets/in_budget.dart' show bucketBudgetMinor;
 import '../plan/balances_card.dart';
 import '../stats.dart';
 import 'buckets_card.dart';
@@ -31,6 +32,8 @@ class DashboardScreen extends ConsumerWidget {
     final review = ref.watch(reviewCountProvider).value ?? 0;
     final sortCount = ref.watch(toSortProvider).length;
     final buckets = ref.watch(bucketSummaryProvider);
+    final everydayBudget = ref.watch(everydayBudgetProvider);
+    final fundBudget = ref.watch(planProvider).value?.fundMinor ?? bucketBudgetMinor;
     final emiMinor = [
       for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
         if (emiActive(e, month)) e.amountMinor,
@@ -58,9 +61,11 @@ class DashboardScreen extends ConsumerWidget {
                         children: [
                           MonthCard(
                             month: month,
+                            everydayLeft: everydayBudget - (buckets?.everyday ?? 0),
+                            fixedLeft: bucketBudgetMinor - (buckets?.fixed ?? 0),
+                            fundLeft: fundBudget - (buckets?.fund ?? 0),
                             inMinor: stats.income,
                             outMinor: buckets == null ? 0 : monthOutMinor(buckets, emiMinor),
-                            investedMinor: buckets?.invested ?? 0,
                           ),
                           const BucketsCard(),
                           if (sortCount > 0) ...[const SizedBox(height: 12), _SortBanner(count: sortCount)],

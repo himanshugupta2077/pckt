@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/theme/icons.dart';
 import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
 import '../budgets/budget_math.dart' show budgetWarnRatio, daysLeftIn;
@@ -16,9 +17,8 @@ import '../plan/plan_providers.dart' show emisProvider;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-/// Recurring and Fund against their monthly budget (₹10,000 each; Fund's
-/// is the plan's), then EMIs, Invest, Lending and Outside, for the month.
-/// Everyday is the budget card above it.
+/// Everyday, Recurring and Fund against their monthly budget (₹10,000
+/// each; Fund's is the plan's), then EMIs, Invest and Others.
 class BucketsCard extends ConsumerWidget {
   const BucketsCard({super.key});
 
@@ -32,7 +32,6 @@ class BucketsCard extends ConsumerWidget {
       for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
         if (emiActive(e, month)) e,
     ];
-    final muted = context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant);
     final everydayBudget = ref.watch(everydayBudgetProvider);
     final now = DateTime.now();
     final days = daysLeftIn(month, now);
@@ -47,19 +46,7 @@ class BucketsCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Expanded(
-                child: Text('Budgets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              ),
-              Text(
-                '${money(everydayBudget + bucketBudgetMinor + fundBudget - s.everyday - s.fixed - s.fund)} left',
-                style: muted,
-              ),
-            ],
-          ),
+          Text('Budgets', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           _Row(
             bucketLabel(Bucket.everyday),
@@ -72,33 +59,10 @@ class BucketsCard extends ConsumerWidget {
           _Row(bucketLabel(Bucket.fund), s.fund, budget: fundBudget, bucket: Bucket.fund),
           const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1)),
           Text('Not budgeted', style: context.text.labelLarge?.copyWith(color: context.colors.onSurfaceVariant)),
-          Text('Money that leaves your accounts but isn\'t day-to-day spending.', style: muted),
           const SizedBox(height: 4),
           if (emis.isNotEmpty) _EmiRow(emis: emis),
           if (s.invested != 0) _Row('Invested', s.invested, bucket: Bucket.invest),
-          if (s.lentIn + s.lentOut > 0)
-            // Net: lent and paid back largely cancel out.
-            _Row(
-              s.lentOut >= s.lentIn ? 'Lending, net out' : 'Lending, net in',
-              (s.lentOut - s.lentIn).abs(),
-              bucket: Bucket.lending,
-              detail: 'Out ${money(s.lentOut)} · in ${money(s.lentIn)}',
-            ),
-          if (s.outsideTotal > 0) ...[
-            _Row('Outside', s.outsideTotal, bucket: Bucket.outside),
-            for (final c in s.outside)
-              Padding(
-                padding: const EdgeInsets.only(left: 12, bottom: 2),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(c.category?.name ?? 'Uncategorised', style: muted, overflow: TextOverflow.ellipsis),
-                    ),
-                    Text(money(c.amount), style: muted?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                  ],
-                ),
-              ),
-          ],
+          if (s.lentIn + s.lentOut > 0 || s.outsideTotal > 0) const _OthersRow(),
         ],
       ),
     );
@@ -216,6 +180,79 @@ class _EmiRow extends StatelessWidget {
     );
   }
 }
+
+/// Lending and Outside together. The net of lending is not shown: money
+/// lent and paid back mostly cancels, and a statement does not show that net.
+class _OthersRow extends StatelessWidget {
+  const _OthersRow();
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: () => _showOthers(context),
+    borderRadius: BorderRadius.circular(8),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text('Others', style: context.text.labelLarge)),
+          Icon(PhosphorIconsBold.caretRight, size: 16, color: context.colors.onSurfaceVariant),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _showOthers(BuildContext context) => showModalBottomSheet(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  builder: (_) => DraggableScrollableSheet(
+    expand: false,
+    initialChildSize: 0.6,
+    maxChildSize: 0.95,
+    builder: (context, scroll) => Consumer(
+      builder: (context, ref, _) {
+        final txns = ref.watch(monthTxnsProvider).value ?? const <TxnView>[];
+        final lending = [
+          for (final v in txns)
+            if (!isTransferLike(v) && bucketOf(v) == Bucket.lending) v,
+        ];
+        final outside = [
+          for (final v in txns)
+            if (budgetDecision(v).bucket == Bucket.outside) v,
+        ];
+        Widget section(String label, List<TxnView> rows) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 14, 8, 4),
+              child: Text(label, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            ),
+            if (rows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Text('Nothing this month.', style: context.text.bodyMedium),
+              ),
+            for (final v in rows)
+              TransactionTile(view: v, showDate: true, onTap: () => showTransactionSheet(context, v.txn.id)),
+          ],
+        );
+        return ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+              child: Text('Others', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            ),
+            section('Lending', lending),
+            section('Outside', outside),
+          ],
+        );
+      },
+    ),
+  ),
+);
 
 /// The month's payments in [bucket], newest first.
 Future<void> _showBucket(BuildContext context, Bucket bucket, String label) => showModalBottomSheet(

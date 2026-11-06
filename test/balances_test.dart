@@ -102,6 +102,7 @@ void main() {
     expect(find.text('Monthly net worth'), findsOneWidget);
     expect(find.text('Budgets'), findsOneWidget);
     expect(find.text('Not budgeted'), findsOneWidget);
+    expect(find.textContaining('day-to-day'), findsNothing);
     expect(find.text('₹649 of ₹10,000', findRichText: true), findsOneWidget);
 
     await tester.tap(find.text('open'));
