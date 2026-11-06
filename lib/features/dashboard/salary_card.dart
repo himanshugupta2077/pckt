@@ -177,7 +177,32 @@ Future<void> showSalarySheet(BuildContext context, SalaryPile pile) => showModal
                 child: Text('Nothing this month.', style: context.text.bodyMedium),
               ),
             for (final v in rows)
-              TransactionTile(view: v, showDate: true, onTap: () => showTransactionSheet(context, v.txn.id)),
+              if (pile == SalaryPile.invested)
+                TransactionTile(view: v, showDate: true, onTap: () => showTransactionSheet(context, v.txn.id))
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    TransactionTile(view: v, showDate: true, onTap: () => showTransactionSheet(context, v.txn.id)),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8, bottom: 6),
+                      child: SegmentedButton<SpendKind>(
+                        segments: const [
+                          ButtonSegment(value: SpendKind.need, label: Text('Need')),
+                          ButtonSegment(value: SpendKind.want, label: Text('Want')),
+                        ],
+                        selected: {kind},
+                        showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        // This payment only. The payment's sheet can answer for the payee.
+                        onSelectionChanged: (k) => ref.read(databaseProvider).setTxnSpendKind(v.txn.id, k.first),
+                      ),
+                    ),
+                  ],
+                ),
           ],
         );
       },
