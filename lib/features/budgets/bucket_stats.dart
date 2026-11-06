@@ -120,3 +120,55 @@ class BucketSummary {
 
   int get outsideTotal => outside.fold(0, (s, c) => s + c.amount);
 }
+
+/// Out on the month card: spending, EMIs, money invested and money lent,
+/// less what came back. [emiMinor] is the plan's EMI list, not payments.
+int monthOutMinor(BucketSummary s, int emiMinor) =>
+    s.everyday + s.fixed + s.fund + s.outsideTotal + emiMinor + s.invested + s.lentOut - s.lentIn;
+
+/// One piece of [monthOutMinor], for the Out sheet. [minor] is its share:
+/// negative when money came back (an investment sold, or lending repaid).
+class FlowLine {
+  const FlowLine(this.bucket, this.minor, this.txns);
+
+  final Bucket bucket;
+  final int minor;
+  final List<TxnView> txns;
+
+  String get label => bucket == Bucket.invest ? 'Invested' : bucketLabel(bucket);
+}
+
+/// What adds up to Out for transactions already in one month. EMI is not
+/// here. Transfers and payments with no home-currency amount are skipped.
+List<FlowLine> outLines(Iterable<TxnView> txns) {
+  final byBucket = {for (final b in Bucket.values) b: <TxnView>[]};
+  for (final v in txns) {
+    final amount = v.txn.homeMinor;
+    if (amount == null || isTransferLike(v)) continue;
+    final decided = budgetDecision(v).bucket;
+    if (decided != null) {
+      byBucket[decided]!.add(v);
+    } else if (isInvest(v) || isLending(v)) {
+      // A credit has no spend bucket, but money back from investing or
+      // lending still changes Out.
+      byBucket[bucketOf(v)]!.add(v);
+    }
+  }
+  int share(Bucket b, List<TxnView> list) {
+    if (b != Bucket.invest && b != Bucket.lending) {
+      return list.fold(0, (s, v) => s + (v.txn.homeMinor ?? 0));
+    }
+    var n = 0;
+    for (final v in list) {
+      final amount = v.txn.homeMinor ?? 0;
+      n += v.txn.direction == TxnDirection.debit ? amount : -amount;
+    }
+    return n;
+  }
+
+  const order = [Bucket.everyday, Bucket.fixed, Bucket.fund, Bucket.invest, Bucket.lending, Bucket.outside];
+  return [
+    for (final b in order)
+      if (byBucket[b]!.isNotEmpty) FlowLine(b, share(b, byBucket[b]!), byBucket[b]!),
+  ];
+}

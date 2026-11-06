@@ -94,5 +94,11 @@ void main() {
     expect((s.invested, s.lentOut, s.lentIn), (4500000 - 204742, 100000, 150000));
     final stats = MonthStats(txns, m);
     expect((stats.income, stats.outside, stats.spent), (0, 0, 0));
+    final lines = outLines(txns);
+    final invested = lines.singleWhere((l) => l.bucket == Bucket.invest);
+    final lending = lines.singleWhere((l) => l.bucket == Bucket.lending);
+    expect(invested.minor, s.invested);
+    expect(lending.minor, s.lentOut - s.lentIn);
+    expect(lines.fold(0, (n, l) => n + l.minor) + 3820000, monthOutMinor(s, 3820000));
   });
 }

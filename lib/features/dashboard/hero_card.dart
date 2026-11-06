@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/format.dart';
+import '../../core/theme/icons.dart';
 import '../../core/theme/palette.dart';
 import '../../ui/widgets.dart';
 import 'income_sheet.dart';
+import 'out_sheet.dart';
 
 /// The month at a glance: what's left as the one big number, In and Out
 /// under it. In is income. Out is every rupee that left your accounts
@@ -36,24 +38,35 @@ class MonthCard extends StatelessWidget {
       fontWeight: FontWeight.w600,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    Widget part(String label, int minor, {VoidCallback? onTap}) => InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Text.rich(
-          TextSpan(
+    Widget part(String label, int minor, {required bool moneyIn, VoidCallback? onTap}) {
+      final color = moneyIn ? Palette.income : Palette.expense;
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              TextSpan(
-                text: '$label  ',
-                style: context.text.bodySmall?.copyWith(color: soft),
+              Icon(
+                moneyIn ? PhosphorIconsBold.arrowDownLeft : PhosphorIconsBold.arrowUpRight,
+                size: 16,
+                color: color,
               ),
-              TextSpan(text: _rupees(minor), style: small),
+              const SizedBox(width: 4),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: '$label  ', style: context.text.bodySmall?.copyWith(color: color)),
+                    TextSpan(text: _rupees(minor), style: small?.copyWith(color: color)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-      ),
-    );
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -88,8 +101,8 @@ class MonthCard extends StatelessWidget {
             spacing: 20,
             runSpacing: 4,
             children: [
-              part('In', inMinor, onTap: () => showIncomeSheet(context)),
-              part('Out', outMinor),
+              part('In', inMinor, moneyIn: true, onTap: () => showIncomeSheet(context)),
+              part('Out', outMinor, moneyIn: false, onTap: () => showOutSheet(context)),
             ],
           ),
           if (investedMinor > 0)

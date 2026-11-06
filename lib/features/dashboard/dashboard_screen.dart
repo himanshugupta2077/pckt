@@ -9,6 +9,7 @@ import '../../core/theme/palette.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
 import '../activity/transaction_sheet.dart';
+import '../budgets/bucket_stats.dart';
 import '../budgets/budget_providers.dart';
 import '../plan/balances_card.dart';
 import '../stats.dart';
@@ -58,16 +59,7 @@ class DashboardScreen extends ConsumerWidget {
                           MonthCard(
                             month: month,
                             inMinor: stats.income,
-                            outMinor: buckets == null
-                                ? 0
-                                : buckets.everyday +
-                                      buckets.fixed +
-                                      buckets.fund +
-                                      buckets.outsideTotal +
-                                      emiMinor +
-                                      buckets.invested +
-                                      buckets.lentOut -
-                                      buckets.lentIn,
+                            outMinor: buckets == null ? 0 : monthOutMinor(buckets, emiMinor),
                             investedMinor: buckets?.invested ?? 0,
                           ),
                           const BucketsCard(),
