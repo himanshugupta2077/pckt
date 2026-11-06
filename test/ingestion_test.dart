@@ -222,6 +222,35 @@ void main() {
     expect(await db.select(db.transactions).get(), hasLength(2));
   });
 
+  test('a payment added from a statement survives an SMS re-import', () async {
+    final id = await db
+        .into(db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            amountMinor: 120000,
+            direction: TxnDirection.debit,
+            occurredAt: t0,
+            mode: PaymentMode.upi,
+            status: TxnStatus.confirmed,
+          ),
+        );
+    await db
+        .into(db.rawMessages)
+        .insert(
+          RawMessagesCompanion.insert(
+            source: SourceKind.statement,
+            externalId: 'stmt-1',
+            sender: 'Bank statement',
+            body: 'WDL TFR UPI/DR/100000000003/SHOP',
+            receivedAt: t0,
+            parseStatus: ParseStatus.parsed,
+            transactionId: Value(id),
+          ),
+        );
+    await db.resetSource(SourceKind.sms);
+    expect((await db.select(db.transactions).get()).single.id, id);
+  });
+
   test('different refs never merge', () async {
     await svc.ingest([
       msg('VM-HDFCBK', 'Sent Rs.250.00 From HDFC Bank A/C *4521 To SWIGGY On 12/10/26 Ref 528512345678', t0),

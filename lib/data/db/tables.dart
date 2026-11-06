@@ -1,7 +1,9 @@
 import 'package:drift/drift.dart';
 
-/// Where a piece of evidence came from.
-enum SourceKind { sms, email, manual, shortcut }
+/// Where a piece of evidence came from. [statement] is a line from a bank
+/// or card statement that no message reported. New values go at the end:
+/// the index is what is stored.
+enum SourceKind { sms, email, manual, shortcut, statement }
 
 enum TxnDirection { debit, credit }
 

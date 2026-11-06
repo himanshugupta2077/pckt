@@ -55,7 +55,11 @@ class PaymentEvidence extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    s.source == SourceKind.email ? PhosphorIconsFill.envelopeSimple : PhosphorIconsFill.chatText,
+                    switch (s.source) {
+                      SourceKind.email => PhosphorIconsFill.envelopeSimple,
+                      SourceKind.statement => PhosphorIconsFill.receipt,
+                      _ => PhosphorIconsFill.chatText,
+                    },
                     size: 15,
                     color: context.colors.onSurfaceVariant,
                   ),
