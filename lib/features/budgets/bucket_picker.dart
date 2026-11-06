@@ -4,7 +4,7 @@ import '../../data/db/database.dart';
 import '../../ui/widgets.dart';
 import 'in_budget.dart';
 
-/// The 4-way bucket choice, used for categories, payees and payments.
+/// The bucket choice, used for categories, payees and payments.
 /// [value] null shows nothing selected (an unanswered To-sort row).
 class BucketPicker extends StatelessWidget {
   const BucketPicker({super.key, required this.value, required this.onChanged});
@@ -28,9 +28,11 @@ class BucketPicker extends StatelessWidget {
       selected: {?value},
       emptySelectionAllowed: true,
       showSelectedIcon: false,
-      style: const ButtonStyle(
+      // Five choices share a phone's width: a smaller label keeps "Everyday" whole.
+      style: ButtonStyle(
         visualDensity: VisualDensity.compact,
-        padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4)),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 2)),
+        textStyle: WidgetStatePropertyAll(context.text.labelMedium),
       ),
       onSelectionChanged: onChanged == null
           ? null
