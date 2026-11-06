@@ -153,7 +153,7 @@ class _OutList extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
           child: Text(
-            'Left this month is In minus this. Everyday, Recurring and Fund are the budgets, ${money(bucketBudgetMinor)} each. EMI, invested and lending count here too.',
+            'Everything that counts as Out. Everyday, Recurring and Fund are the budgets, ${money(bucketBudgetMinor)} each. EMI, invested and lending count here too.',
             style: muted,
           ),
         ),
