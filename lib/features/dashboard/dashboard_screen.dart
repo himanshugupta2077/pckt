@@ -15,7 +15,7 @@ import '../budgets/budget_providers.dart';
 import '../budgets/in_budget.dart' show bucketBudgetMinor;
 import '../plan/balances_card.dart';
 import '../stats.dart';
-import 'buckets_card.dart';
+import 'emergency_fund_card.dart';
 import 'hero_card.dart';
 import 'salary_card.dart';
 import 'where_it_went.dart';
@@ -36,10 +36,11 @@ class DashboardScreen extends ConsumerWidget {
     final buckets = ref.watch(bucketSummaryProvider);
     final everydayBudget = ref.watch(everydayBudgetProvider);
     final fundBudget = ref.watch(planProvider).value?.fundMinor ?? bucketBudgetMinor;
-    final emiMinor = [
+    final emis = [
       for (final e in ref.watch(emisProvider).value ?? const <Emi>[])
-        if (emiActive(e, month)) e.amountMinor,
-    ].fold(0, (a, b) => a + b);
+        if (emiActive(e, month)) e,
+    ];
+    final emiMinor = emis.fold(0, (a, e) => a + e.amountMinor);
 
     return Scaffold(
       body: SafeArea(
@@ -66,6 +67,7 @@ class DashboardScreen extends ConsumerWidget {
                       sliver: SliverList.list(
                         children: [
                           const SalaryCard(),
+                          const EmergencyFundCard(),
                           MonthCard(
                             month: month,
                             everydaySpent: everydaySpent,
@@ -79,8 +81,11 @@ class DashboardScreen extends ConsumerWidget {
                             everydayNote: everydayLeft > 0 && days > 0 && month == monthStart(now)
                                 ? '${money(everydayLeft ~/ days)} a day for $days day${days == 1 ? '' : 's'}'
                                 : null,
+                            emis: emis,
+                            invested: buckets?.invested ?? 0,
+                            showOthers:
+                                buckets != null && (buckets.lentIn + buckets.lentOut > 0 || buckets.outsideTotal > 0),
                           ),
-                          const BucketsCard(),
                           if (sortCount > 0) ...[const SizedBox(height: 12), _SortBanner(count: sortCount)],
                           if (review > 0) ...[const SizedBox(height: 12), _ReviewBanner(count: review)],
                           if (stats.unconverted > 0) ...[

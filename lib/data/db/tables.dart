@@ -213,6 +213,21 @@ class Plan extends Table {
   DateTimeColumn get goal2Due => dateTime().nullable()();
   IntColumn get goal3Minor => integer().nullable()();
   DateTimeColumn get goal3Due => dateTime().nullable()();
+
+  /// What the emergency fund should hold in all; null until set. The
+  /// holdings are in [EmergencyHoldings].
+  IntColumn get emergencyGoalMinor => integer().nullable()();
+}
+
+/// Where the emergency fund is kept, one row each (an FD, a sweep FD, an
+/// arbitrage fund): a name and what it holds now, entered by hand.
+@DataClassName('EmergencyHolding')
+class EmergencyHoldings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+
+  /// Home-currency minor units.
+  IntColumn get amountMinor => integer()();
 }
 
 /// Loan instalments paid every month that no message reports: a card EMI

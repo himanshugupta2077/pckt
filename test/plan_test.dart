@@ -15,6 +15,7 @@ MonthlyPlan plan({
   DateTime? goal1Due,
   int? goal2,
   DateTime? goal2Due,
+  int? emergencyGoal,
 }) => MonthlyPlan(
   id: 1,
   startMonth: DateTime(2026, 11),
@@ -27,6 +28,7 @@ MonthlyPlan plan({
   goal1Due: goal1Due,
   goal2Minor: goal2,
   goal2Due: goal2Due,
+  emergencyGoalMinor: emergencyGoal,
 );
 
 Emi emi(int amount, DateTime? last, [String name = 'Laptop', SpendKind kind = SpendKind.need]) =>

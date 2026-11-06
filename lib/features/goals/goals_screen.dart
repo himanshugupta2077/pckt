@@ -10,6 +10,7 @@ import '../../providers.dart';
 import '../../ui/amount_field.dart';
 import '../../ui/widgets.dart';
 import '../budgets/budget_providers.dart';
+import '../plan/plan_math.dart' show emergencyStillToSave;
 import '../plan/plan_providers.dart';
 import '../plan/plan_screen.dart' show PlanLine;
 
@@ -146,6 +147,8 @@ class _GoalInputsState extends ConsumerState<_GoalInputs> {
   Widget build(BuildContext context) {
     final p = ref.watch(planProvider).value ?? widget.plan;
     final dues = [p.goal1Due, p.goal2Due, p.goal3Due];
+    final saved = ref.watch(emergencySavedProvider);
+    final fromCard = saved == null ? null : emergencyStillToSave(p, saved);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -157,16 +160,24 @@ class _GoalInputsState extends ConsumerState<_GoalInputs> {
           ),
         ),
         for (final (i, due) in dues.indexed) ...[
-          TextField(
-            controller: _c[i],
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [AmountInputFormatter(currency: _home)],
-            onChanged: (t) => _save(_goalAmount(i, parseAmountInput(t, currency: _home))),
-            decoration: InputDecoration(
-              labelText: i == 0 ? 'Goal 1: still to save (emergency fund)' : 'Goal ${i + 1}: still to save',
-              prefixText: '${currencySymbol(_home)} ',
+          if (i == 0 && fromCard != null)
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: const Text('Goal 1: still to save (emergency fund)'),
+              subtitle: const Text('From the Emergency fund card on Home: its goal less what it holds'),
+              trailing: Text(money(fromCard), style: context.text.titleSmall),
+            )
+          else
+            TextField(
+              controller: _c[i],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter(currency: _home)],
+              onChanged: (t) => _save(_goalAmount(i, parseAmountInput(t, currency: _home))),
+              decoration: InputDecoration(
+                labelText: i == 0 ? 'Goal 1: still to save (emergency fund)' : 'Goal ${i + 1}: still to save',
+                prefixText: '${currencySymbol(_home)} ',
+              ),
             ),
-          ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             title: Text('Goal ${i + 1} by'),

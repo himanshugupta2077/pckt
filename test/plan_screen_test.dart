@@ -27,7 +27,7 @@ void main() {
         child: MaterialApp(theme: appLikeTheme, home: const PlanScreen()),
       ),
     );
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 10; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
     }

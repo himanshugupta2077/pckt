@@ -48,6 +48,7 @@ extension TxnMoney on Transaction {
     BalanceSnapshots,
     Emis,
     SyncLog,
+    EmergencyHoldings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -67,7 +68,7 @@ class AppDatabase extends _$AppDatabase {
   static const protectedCategories = {'Transfers', 'Other'};
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -148,6 +149,11 @@ class AppDatabase extends _$AppDatabase {
       }
       // v11: the server upload log.
       if (from < 11) await m.createTable(syncLog);
+      // v12: the emergency fund's goal and holdings.
+      if (from < 12) {
+        await _addColumnIfMissing(m, plan, plan.emergencyGoalMinor);
+        await m.createTable(emergencyHoldings);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -333,6 +339,21 @@ class AppDatabase extends _$AppDatabase {
       (select(syncLog)..orderBy([(l) => OrderingTerm.desc(l.at), (l) => OrderingTerm.desc(l.id)])).watch();
 
   Future<void> deleteEmi(int id) => (delete(emis)..where((e) => e.id.equals(id))).go();
+
+  Stream<List<EmergencyHolding>> watchEmergencyHoldings() =>
+      (select(emergencyHoldings)..orderBy([(h) => OrderingTerm(expression: h.id)])).watch();
+
+  Future<void> saveEmergencyHolding({int? id, required String name, required int amountMinor}) {
+    final row = EmergencyHoldingsCompanion(name: Value(name), amountMinor: Value(amountMinor));
+    return id == null
+        ? into(emergencyHoldings).insert(row)
+        : (update(emergencyHoldings)..where((h) => h.id.equals(id))).write(row);
+  }
+
+  Future<void> deleteEmergencyHolding(int id) => (delete(emergencyHoldings)..where((h) => h.id.equals(id))).go();
+
+  /// Null clears the goal.
+  Future<void> setEmergencyGoal(int? minor) => savePlan(PlanCompanion(emergencyGoalMinor: Value(minor)));
 
   /// Creates the plan row, starting this month, if there is none.
   Future<void> ensurePlan() async {

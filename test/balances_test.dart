@@ -77,7 +77,6 @@ void main() {
               builder: (context) => Column(
                 children: [
                   BalancesCard(now: DateTime(month.year, month.month, 3)),
-                  const BucketsCard(),
                   TextButton(
                     onPressed: () => showBalancesSheet(context, month, defaultBalanceLabels),
                     child: const Text('open'),
@@ -135,7 +134,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db), prefsProvider.overrideWithValue(prefs)],
-        child: const MaterialApp(home: Scaffold(body: BucketsCard())),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(onPressed: () => showOthersSheet(context), child: const Text('Others')),
+            ),
+          ),
+        ),
       ),
     );
     for (var i = 0; i < 5; i++) {

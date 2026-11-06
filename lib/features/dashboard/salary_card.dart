@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/theme/icons.dart';
+import '../../core/theme/palette.dart';
 import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../ui/widgets.dart';
@@ -56,28 +57,78 @@ class SalarySplitView extends StatelessWidget {
       );
     }
     final (i, n, w, s) = split.percents;
+    final savingsColor = s < 0 ? context.colors.error : (context.isDark ? Palette.mint : _savingsGreen);
+    final shares = [(i, _invested), (n, _needs), (w, _wants), (s, savingsColor)];
+    final filled = shares.fold<int>(0, (t, e) => t + (e.$1 > 0 ? e.$1 : 0));
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Share('Invested', i, split.invested, onTap: () => showSalarySheet(context, SalaryPile.invested)),
-          _Share('Needs', n, split.needs, onTap: () => showSalarySheet(context, SalaryPile.needs)),
-          _Share('Wants', w, split.wants, onTap: () => showSalarySheet(context, SalaryPile.wants)),
-          _Share('Savings', s, split.savings),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 8,
+                child: Row(
+                  children: [
+                    for (final (p, color) in shares)
+                      if (p > 0)
+                        Expanded(
+                          flex: p,
+                          child: Container(color: color),
+                        ),
+                    // Shares under 100% leave the rest of the bar empty.
+                    if (filled < 100)
+                      Expanded(
+                        flex: 100 - filled,
+                        child: Container(color: context.colors.onSurface.withValues(alpha: 0.08)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Share(
+                'Invested',
+                i,
+                split.invested,
+                color: _invested,
+                onTap: () => showSalarySheet(context, SalaryPile.invested),
+              ),
+              _Share('Needs', n, split.needs, color: _needs, onTap: () => showSalarySheet(context, SalaryPile.needs)),
+              _Share('Wants', w, split.wants, color: _wants, onTap: () => showSalarySheet(context, SalaryPile.wants)),
+              _Share('Savings', s, split.savings, color: savingsColor, strong: true),
+            ],
+          ),
         ],
       ),
     );
   }
+
+  // Not status colours: the shares are kinds of money, not good or bad.
+  // Savings alone is green when positive and red when negative.
+  static const _invested = Palette.violet;
+  static const _needs = Color(0xFF1AA0C4);
+  static const _wants = Color(0xFFD9559B);
+  static const _savingsGreen = Color(0xFF14A37F);
 }
 
-/// One share: label, the percent large, the amount small under it.
+/// One share: a colour key and the label, the percent large, the amount
+/// small under it. [strong] colours the percent too (Savings).
 class _Share extends StatelessWidget {
-  const _Share(this.label, this.percent, this.minor, {this.onTap});
+  const _Share(this.label, this.percent, this.minor, {required this.color, this.strong = false, this.onTap});
 
   final String label;
   final int percent;
   final int minor;
+  final Color color;
+  final bool strong;
   final VoidCallback? onTap;
 
   static String _rupees(int minor) => '${minor < 0 ? '−' : ''}${money((minor.abs() / 100).round() * 100)}';
@@ -93,11 +144,23 @@ class _Share extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: muted, maxLines: 1),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(label, style: muted, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
               const SizedBox(height: 2),
               Text(
                 percentLabel(percent),
@@ -105,7 +168,7 @@ class _Share extends StatelessWidget {
                 style: context.text.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                   fontFeatures: const [FontFeature.tabularFigures()],
-                  color: percent < 0 ? context.colors.error : null,
+                  color: strong || percent < 0 ? color : null,
                 ),
               ),
               FittedBox(

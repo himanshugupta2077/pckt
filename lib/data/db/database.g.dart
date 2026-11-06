@@ -3350,6 +3350,15 @@ class $PlanTable extends Plan with TableInfo<$PlanTable, MonthlyPlan> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _emergencyGoalMinorMeta = const VerificationMeta('emergencyGoalMinor');
+  @override
+  late final GeneratedColumn<int> emergencyGoalMinor = GeneratedColumn<int>(
+    'emergency_goal_minor',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3365,6 +3374,7 @@ class $PlanTable extends Plan with TableInfo<$PlanTable, MonthlyPlan> {
     goal2Due,
     goal3Minor,
     goal3Due,
+    emergencyGoalMinor,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3419,6 +3429,12 @@ class $PlanTable extends Plan with TableInfo<$PlanTable, MonthlyPlan> {
     if (data.containsKey('goal3_due')) {
       context.handle(_goal3DueMeta, goal3Due.isAcceptableOrUnknown(data['goal3_due']!, _goal3DueMeta));
     }
+    if (data.containsKey('emergency_goal_minor')) {
+      context.handle(
+        _emergencyGoalMinorMeta,
+        emergencyGoalMinor.isAcceptableOrUnknown(data['emergency_goal_minor']!, _emergencyGoalMinorMeta),
+      );
+    }
     return context;
   }
 
@@ -3441,6 +3457,10 @@ class $PlanTable extends Plan with TableInfo<$PlanTable, MonthlyPlan> {
       goal2Due: attachedDatabase.typeMapping.read(DriftSqlType.dateTime, data['${effectivePrefix}goal2_due']),
       goal3Minor: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}goal3_minor']),
       goal3Due: attachedDatabase.typeMapping.read(DriftSqlType.dateTime, data['${effectivePrefix}goal3_due']),
+      emergencyGoalMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}emergency_goal_minor'],
+      ),
     );
   }
 
@@ -3473,6 +3493,10 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
   final DateTime? goal2Due;
   final int? goal3Minor;
   final DateTime? goal3Due;
+
+  /// What the emergency fund should hold in all; null until set. The
+  /// holdings are in [EmergencyHoldings].
+  final int? emergencyGoalMinor;
   const MonthlyPlan({
     required this.id,
     required this.startMonth,
@@ -3487,6 +3511,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
     this.goal2Due,
     this.goal3Minor,
     this.goal3Due,
+    this.emergencyGoalMinor,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3518,6 +3543,9 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
     if (!nullToAbsent || goal3Due != null) {
       map['goal3_due'] = Variable<DateTime>(goal3Due);
     }
+    if (!nullToAbsent || emergencyGoalMinor != null) {
+      map['emergency_goal_minor'] = Variable<int>(emergencyGoalMinor);
+    }
     return map;
   }
 
@@ -3536,6 +3564,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
       goal2Due: goal2Due == null && nullToAbsent ? const Value.absent() : Value(goal2Due),
       goal3Minor: goal3Minor == null && nullToAbsent ? const Value.absent() : Value(goal3Minor),
       goal3Due: goal3Due == null && nullToAbsent ? const Value.absent() : Value(goal3Due),
+      emergencyGoalMinor: emergencyGoalMinor == null && nullToAbsent ? const Value.absent() : Value(emergencyGoalMinor),
     );
   }
 
@@ -3555,6 +3584,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
       goal2Due: serializer.fromJson<DateTime?>(json['goal2Due']),
       goal3Minor: serializer.fromJson<int?>(json['goal3Minor']),
       goal3Due: serializer.fromJson<DateTime?>(json['goal3Due']),
+      emergencyGoalMinor: serializer.fromJson<int?>(json['emergencyGoalMinor']),
     );
   }
   @override
@@ -3574,6 +3604,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
       'goal2Due': serializer.toJson<DateTime?>(goal2Due),
       'goal3Minor': serializer.toJson<int?>(goal3Minor),
       'goal3Due': serializer.toJson<DateTime?>(goal3Due),
+      'emergencyGoalMinor': serializer.toJson<int?>(emergencyGoalMinor),
     };
   }
 
@@ -3591,6 +3622,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
     Value<DateTime?> goal2Due = const Value.absent(),
     Value<int?> goal3Minor = const Value.absent(),
     Value<DateTime?> goal3Due = const Value.absent(),
+    Value<int?> emergencyGoalMinor = const Value.absent(),
   }) => MonthlyPlan(
     id: id ?? this.id,
     startMonth: startMonth ?? this.startMonth,
@@ -3605,6 +3637,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
     goal2Due: goal2Due.present ? goal2Due.value : this.goal2Due,
     goal3Minor: goal3Minor.present ? goal3Minor.value : this.goal3Minor,
     goal3Due: goal3Due.present ? goal3Due.value : this.goal3Due,
+    emergencyGoalMinor: emergencyGoalMinor.present ? emergencyGoalMinor.value : this.emergencyGoalMinor,
   );
   MonthlyPlan copyWithCompanion(PlanCompanion data) {
     return MonthlyPlan(
@@ -3621,6 +3654,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
       goal2Due: data.goal2Due.present ? data.goal2Due.value : this.goal2Due,
       goal3Minor: data.goal3Minor.present ? data.goal3Minor.value : this.goal3Minor,
       goal3Due: data.goal3Due.present ? data.goal3Due.value : this.goal3Due,
+      emergencyGoalMinor: data.emergencyGoalMinor.present ? data.emergencyGoalMinor.value : this.emergencyGoalMinor,
     );
   }
 
@@ -3639,7 +3673,8 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
           ..write('goal2Minor: $goal2Minor, ')
           ..write('goal2Due: $goal2Due, ')
           ..write('goal3Minor: $goal3Minor, ')
-          ..write('goal3Due: $goal3Due')
+          ..write('goal3Due: $goal3Due, ')
+          ..write('emergencyGoalMinor: $emergencyGoalMinor')
           ..write(')'))
         .toString();
   }
@@ -3659,6 +3694,7 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
     goal2Due,
     goal3Minor,
     goal3Due,
+    emergencyGoalMinor,
   );
   @override
   bool operator ==(Object other) =>
@@ -3676,7 +3712,8 @@ class MonthlyPlan extends DataClass implements Insertable<MonthlyPlan> {
           other.goal2Minor == this.goal2Minor &&
           other.goal2Due == this.goal2Due &&
           other.goal3Minor == this.goal3Minor &&
-          other.goal3Due == this.goal3Due);
+          other.goal3Due == this.goal3Due &&
+          other.emergencyGoalMinor == this.emergencyGoalMinor);
 }
 
 class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
@@ -3693,6 +3730,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
   final Value<DateTime?> goal2Due;
   final Value<int?> goal3Minor;
   final Value<DateTime?> goal3Due;
+  final Value<int?> emergencyGoalMinor;
   const PlanCompanion({
     this.id = const Value.absent(),
     this.startMonth = const Value.absent(),
@@ -3707,6 +3745,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
     this.goal2Due = const Value.absent(),
     this.goal3Minor = const Value.absent(),
     this.goal3Due = const Value.absent(),
+    this.emergencyGoalMinor = const Value.absent(),
   });
   PlanCompanion.insert({
     this.id = const Value.absent(),
@@ -3722,6 +3761,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
     this.goal2Due = const Value.absent(),
     this.goal3Minor = const Value.absent(),
     this.goal3Due = const Value.absent(),
+    this.emergencyGoalMinor = const Value.absent(),
   }) : startMonth = Value(startMonth);
   static Insertable<MonthlyPlan> custom({
     Expression<int>? id,
@@ -3737,6 +3777,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
     Expression<DateTime>? goal2Due,
     Expression<int>? goal3Minor,
     Expression<DateTime>? goal3Due,
+    Expression<int>? emergencyGoalMinor,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3752,6 +3793,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
       if (goal2Due != null) 'goal2_due': goal2Due,
       if (goal3Minor != null) 'goal3_minor': goal3Minor,
       if (goal3Due != null) 'goal3_due': goal3Due,
+      if (emergencyGoalMinor != null) 'emergency_goal_minor': emergencyGoalMinor,
     });
   }
 
@@ -3769,6 +3811,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
     Value<DateTime?>? goal2Due,
     Value<int?>? goal3Minor,
     Value<DateTime?>? goal3Due,
+    Value<int?>? emergencyGoalMinor,
   }) {
     return PlanCompanion(
       id: id ?? this.id,
@@ -3784,6 +3827,7 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
       goal2Due: goal2Due ?? this.goal2Due,
       goal3Minor: goal3Minor ?? this.goal3Minor,
       goal3Due: goal3Due ?? this.goal3Due,
+      emergencyGoalMinor: emergencyGoalMinor ?? this.emergencyGoalMinor,
     );
   }
 
@@ -3829,6 +3873,9 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
     if (goal3Due.present) {
       map['goal3_due'] = Variable<DateTime>(goal3Due.value);
     }
+    if (emergencyGoalMinor.present) {
+      map['emergency_goal_minor'] = Variable<int>(emergencyGoalMinor.value);
+    }
     return map;
   }
 
@@ -3847,7 +3894,8 @@ class PlanCompanion extends UpdateCompanion<MonthlyPlan> {
           ..write('goal2Minor: $goal2Minor, ')
           ..write('goal2Due: $goal2Due, ')
           ..write('goal3Minor: $goal3Minor, ')
-          ..write('goal3Due: $goal3Due')
+          ..write('goal3Due: $goal3Due, ')
+          ..write('emergencyGoalMinor: $emergencyGoalMinor')
           ..write(')'))
         .toString();
   }
@@ -4834,6 +4882,212 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogData> {
   }
 }
 
+class $EmergencyHoldingsTable extends EmergencyHoldings with TableInfo<$EmergencyHoldingsTable, EmergencyHolding> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EmergencyHoldingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _amountMinorMeta = const VerificationMeta('amountMinor');
+  @override
+  late final GeneratedColumn<int> amountMinor = GeneratedColumn<int>(
+    'amount_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, amountMinor];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'emergency_holdings';
+  @override
+  VerificationContext validateIntegrity(Insertable<EmergencyHolding> instance, {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(_nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('amount_minor')) {
+      context.handle(_amountMinorMeta, amountMinor.isAcceptableOrUnknown(data['amount_minor']!, _amountMinorMeta));
+    } else if (isInserting) {
+      context.missing(_amountMinorMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  EmergencyHolding map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EmergencyHolding(
+      id: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping.read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      amountMinor: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}amount_minor'])!,
+    );
+  }
+
+  @override
+  $EmergencyHoldingsTable createAlias(String alias) {
+    return $EmergencyHoldingsTable(attachedDatabase, alias);
+  }
+}
+
+class EmergencyHolding extends DataClass implements Insertable<EmergencyHolding> {
+  final int id;
+  final String name;
+
+  /// Home-currency minor units.
+  final int amountMinor;
+  const EmergencyHolding({required this.id, required this.name, required this.amountMinor});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['amount_minor'] = Variable<int>(amountMinor);
+    return map;
+  }
+
+  EmergencyHoldingsCompanion toCompanion(bool nullToAbsent) {
+    return EmergencyHoldingsCompanion(id: Value(id), name: Value(name), amountMinor: Value(amountMinor));
+  }
+
+  factory EmergencyHolding.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EmergencyHolding(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      amountMinor: serializer.fromJson<int>(json['amountMinor']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'amountMinor': serializer.toJson<int>(amountMinor),
+    };
+  }
+
+  EmergencyHolding copyWith({int? id, String? name, int? amountMinor}) =>
+      EmergencyHolding(id: id ?? this.id, name: name ?? this.name, amountMinor: amountMinor ?? this.amountMinor);
+  EmergencyHolding copyWithCompanion(EmergencyHoldingsCompanion data) {
+    return EmergencyHolding(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      amountMinor: data.amountMinor.present ? data.amountMinor.value : this.amountMinor,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmergencyHolding(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('amountMinor: $amountMinor')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, amountMinor);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EmergencyHolding &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.amountMinor == this.amountMinor);
+}
+
+class EmergencyHoldingsCompanion extends UpdateCompanion<EmergencyHolding> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> amountMinor;
+  const EmergencyHoldingsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.amountMinor = const Value.absent(),
+  });
+  EmergencyHoldingsCompanion.insert({this.id = const Value.absent(), required String name, required int amountMinor})
+    : name = Value(name),
+      amountMinor = Value(amountMinor);
+  static Insertable<EmergencyHolding> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? amountMinor,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (amountMinor != null) 'amount_minor': amountMinor,
+    });
+  }
+
+  EmergencyHoldingsCompanion copyWith({Value<int>? id, Value<String>? name, Value<int>? amountMinor}) {
+    return EmergencyHoldingsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      amountMinor: amountMinor ?? this.amountMinor,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (amountMinor.present) {
+      map['amount_minor'] = Variable<int>(amountMinor.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmergencyHoldingsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('amountMinor: $amountMinor')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4847,6 +5101,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BalanceSnapshotsTable balanceSnapshots = $BalanceSnapshotsTable(this);
   late final $EmisTable emis = $EmisTable(this);
   late final $SyncLogTable syncLog = $SyncLogTable(this);
+  late final $EmergencyHoldingsTable emergencyHoldings = $EmergencyHoldingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
@@ -4861,6 +5116,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     balanceSnapshots,
     emis,
     syncLog,
+    emergencyHoldings,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -7079,6 +7335,7 @@ typedef $$PlanTableCreateCompanionBuilder = PlanCompanion Function({
   Value<DateTime?> goal2Due,
   Value<int?> goal3Minor,
   Value<DateTime?> goal3Due,
+  Value<int?> emergencyGoalMinor,
 });
 typedef $$PlanTableUpdateCompanionBuilder = PlanCompanion Function({
   Value<int> id,
@@ -7094,6 +7351,7 @@ typedef $$PlanTableUpdateCompanionBuilder = PlanCompanion Function({
   Value<DateTime?> goal2Due,
   Value<int?> goal3Minor,
   Value<DateTime?> goal3Due,
+  Value<int?> emergencyGoalMinor,
 });
 
 class $$PlanTableFilterComposer extends Composer<_$AppDatabase, $PlanTable> {
@@ -7141,6 +7399,9 @@ class $$PlanTableFilterComposer extends Composer<_$AppDatabase, $PlanTable> {
 
   ColumnFilters<DateTime> get goal3Due =>
       $composableBuilder(column: $table.goal3Due, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get emergencyGoalMinor =>
+      $composableBuilder(column: $table.emergencyGoalMinor, builder: (column) => ColumnFilters(column));
 }
 
 class $$PlanTableOrderingComposer extends Composer<_$AppDatabase, $PlanTable> {
@@ -7188,6 +7449,9 @@ class $$PlanTableOrderingComposer extends Composer<_$AppDatabase, $PlanTable> {
 
   ColumnOrderings<DateTime> get goal3Due =>
       $composableBuilder(column: $table.goal3Due, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get emergencyGoalMinor =>
+      $composableBuilder(column: $table.emergencyGoalMinor, builder: (column) => ColumnOrderings(column));
 }
 
 class $$PlanTableAnnotationComposer extends Composer<_$AppDatabase, $PlanTable> {
@@ -7225,6 +7489,9 @@ class $$PlanTableAnnotationComposer extends Composer<_$AppDatabase, $PlanTable> 
   GeneratedColumn<int> get goal3Minor => $composableBuilder(column: $table.goal3Minor, builder: (column) => column);
 
   GeneratedColumn<DateTime> get goal3Due => $composableBuilder(column: $table.goal3Due, builder: (column) => column);
+
+  GeneratedColumn<int> get emergencyGoalMinor =>
+      $composableBuilder(column: $table.emergencyGoalMinor, builder: (column) => column);
 }
 
 class $$PlanTableTableManager
@@ -7265,6 +7532,7 @@ class $$PlanTableTableManager
                 Value<DateTime?> goal2Due = const Value.absent(),
                 Value<int?> goal3Minor = const Value.absent(),
                 Value<DateTime?> goal3Due = const Value.absent(),
+                Value<int?> emergencyGoalMinor = const Value.absent(),
               }) => PlanCompanion(
                 id: id,
                 startMonth: startMonth,
@@ -7279,6 +7547,7 @@ class $$PlanTableTableManager
                 goal2Due: goal2Due,
                 goal3Minor: goal3Minor,
                 goal3Due: goal3Due,
+                emergencyGoalMinor: emergencyGoalMinor,
               ),
           createCompanionCallback:
               ({
@@ -7295,6 +7564,7 @@ class $$PlanTableTableManager
                 Value<DateTime?> goal2Due = const Value.absent(),
                 Value<int?> goal3Minor = const Value.absent(),
                 Value<DateTime?> goal3Due = const Value.absent(),
+                Value<int?> emergencyGoalMinor = const Value.absent(),
               }) => PlanCompanion.insert(
                 id: id,
                 startMonth: startMonth,
@@ -7309,6 +7579,7 @@ class $$PlanTableTableManager
                 goal2Due: goal2Due,
                 goal3Minor: goal3Minor,
                 goal3Due: goal3Due,
+                emergencyGoalMinor: emergencyGoalMinor,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -7826,6 +8097,125 @@ typedef $$SyncLogTableProcessedTableManager =
       SyncLogData,
       PrefetchHooks Function()
     >;
+typedef $$EmergencyHoldingsTableCreateCompanionBuilder = EmergencyHoldingsCompanion Function({
+  Value<int> id,
+  required String name,
+  required int amountMinor,
+});
+typedef $$EmergencyHoldingsTableUpdateCompanionBuilder = EmergencyHoldingsCompanion Function({
+  Value<int> id,
+  Value<String> name,
+  Value<int> amountMinor,
+});
+
+class $$EmergencyHoldingsTableFilterComposer extends Composer<_$AppDatabase, $EmergencyHoldingsTable> {
+  $$EmergencyHoldingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get amountMinor =>
+      $composableBuilder(column: $table.amountMinor, builder: (column) => ColumnFilters(column));
+}
+
+class $$EmergencyHoldingsTableOrderingComposer extends Composer<_$AppDatabase, $EmergencyHoldingsTable> {
+  $$EmergencyHoldingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get amountMinor =>
+      $composableBuilder(column: $table.amountMinor, builder: (column) => ColumnOrderings(column));
+}
+
+class $$EmergencyHoldingsTableAnnotationComposer extends Composer<_$AppDatabase, $EmergencyHoldingsTable> {
+  $$EmergencyHoldingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name => $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get amountMinor => $composableBuilder(column: $table.amountMinor, builder: (column) => column);
+}
+
+class $$EmergencyHoldingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EmergencyHoldingsTable,
+          EmergencyHolding,
+          $$EmergencyHoldingsTableFilterComposer,
+          $$EmergencyHoldingsTableOrderingComposer,
+          $$EmergencyHoldingsTableAnnotationComposer,
+          $$EmergencyHoldingsTableCreateCompanionBuilder,
+          $$EmergencyHoldingsTableUpdateCompanionBuilder,
+          (EmergencyHolding, BaseReferences<_$AppDatabase, $EmergencyHoldingsTable, EmergencyHolding>),
+          EmergencyHolding,
+          PrefetchHooks Function()
+        > {
+  $$EmergencyHoldingsTableTableManager(_$AppDatabase db, $EmergencyHoldingsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$EmergencyHoldingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$EmergencyHoldingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$EmergencyHoldingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<int> amountMinor = const Value.absent(),
+          }) => EmergencyHoldingsCompanion(id: id, name: name, amountMinor: amountMinor),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String name,
+            required int amountMinor,
+          }) => EmergencyHoldingsCompanion.insert(id: id, name: name, amountMinor: amountMinor),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$EmergencyHoldingsTable, EmergencyHolding>(table),
+                  BaseReferences<_$AppDatabase, $EmergencyHoldingsTable, EmergencyHolding>(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EmergencyHoldingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EmergencyHoldingsTable,
+      EmergencyHolding,
+      $$EmergencyHoldingsTableFilterComposer,
+      $$EmergencyHoldingsTableOrderingComposer,
+      $$EmergencyHoldingsTableAnnotationComposer,
+      $$EmergencyHoldingsTableCreateCompanionBuilder,
+      $$EmergencyHoldingsTableUpdateCompanionBuilder,
+      (EmergencyHolding, BaseReferences<_$AppDatabase, $EmergencyHoldingsTable, EmergencyHolding>),
+      EmergencyHolding,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7841,4 +8231,6 @@ class $AppDatabaseManager {
       $$BalanceSnapshotsTableTableManager(_db, _db.balanceSnapshots);
   $$EmisTableTableManager get emis => $$EmisTableTableManager(_db, _db.emis);
   $$SyncLogTableTableManager get syncLog => $$SyncLogTableTableManager(_db, _db.syncLog);
+  $$EmergencyHoldingsTableTableManager get emergencyHoldings =>
+      $$EmergencyHoldingsTableTableManager(_db, _db.emergencyHoldings);
 }

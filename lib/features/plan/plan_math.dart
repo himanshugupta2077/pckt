@@ -13,6 +13,13 @@ class GoalPlan {
   final int? perMonth;
 }
 
+/// Goal 1 when the emergency fund card has a goal: the goal less what its
+/// holdings have now. Null when that card has no goal (goal 1 is typed).
+int? emergencyStillToSave(MonthlyPlan plan, int saved) {
+  final goal = plan.emergencyGoalMinor;
+  return goal == null ? null : (goal - saved).clamp(0, goal);
+}
+
 /// The plan's outputs for [month] (normally this month).
 ///
 /// Planned left over = salary − EMI − Everyday budget − Recurring budget −
@@ -28,6 +35,7 @@ class PlanOutcome {
     required this.everyday,
     required this.fixed,
     required this.familyAvg,
+    int emergencySaved = 0,
   }) : salary = plan.salaryMinor,
        fund = plan.fundMinor,
        investing = plan.investingMinor,
@@ -37,7 +45,7 @@ class PlanOutcome {
        ],
        goals = [
          for (final (i, (amount, due)) in [
-           (plan.goal1Minor, plan.goal1Due),
+           (emergencyStillToSave(plan, emergencySaved) ?? plan.goal1Minor, plan.goal1Due),
            (plan.goal2Minor, plan.goal2Due),
            (plan.goal3Minor, plan.goal3Due),
          ].indexed)
