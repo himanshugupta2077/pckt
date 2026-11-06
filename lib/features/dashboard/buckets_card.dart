@@ -77,9 +77,10 @@ class BucketsCard extends ConsumerWidget {
           if (emis.isNotEmpty) _EmiRow(emis: emis),
           if (s.invested != 0) _Row('Invested', s.invested, bucket: Bucket.invest),
           if (s.lentIn + s.lentOut > 0)
+            // Net: lent and paid back largely cancel out.
             _Row(
-              'Lending',
-              s.lentOut,
+              s.lentOut >= s.lentIn ? 'Lending, net out' : 'Lending, net in',
+              (s.lentOut - s.lentIn).abs(),
               bucket: Bucket.lending,
               detail: 'Out ${money(s.lentOut)} · in ${money(s.lentIn)}',
             ),
